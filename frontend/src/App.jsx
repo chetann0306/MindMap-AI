@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Brain, Calendar, BookOpen, Layers, Clock, CheckCircle, Circle, Upload, FileText, Loader2, RefreshCw, BarChart2, Download, FileEdit, X, Save, HelpCircle, Eye, Play, Pause, RotateCcw } from 'lucide-react';
+import { Brain, Calendar, BookOpen, Layers, Clock, CheckCircle, Circle, Upload, FileText, Loader2, RefreshCw, BarChart2, Download, FileEdit, X, Save, HelpCircle, Eye, Play, Pause, RotateCcw, Sliders } from 'lucide-react';
 import * as pdfjsLib from 'pdfjs-dist';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version || '3.11.174'}/build/pdf.worker.min.js`;
@@ -14,7 +14,8 @@ export default function App() {
   const [activeNoteSlot, setActiveNoteSlot] = useState(null);
   const fileInputRef = useRef(null);
   
-  // --- POMODORO TIMER CORE STATES ---
+  // --- POMODORO CORE CONFIGURABLE STATES ---
+  const [selectedDuration, setSelectedDuration] = useState(25); // Configurable length tier (Minutes)
   const [timeLeft, setTimeLeft] = useState(25 * 60); 
   const [timerRunning, setTimerRunning] = useState(false);
   const [isBreak, setIsBreak] = useState(false);
@@ -45,7 +46,14 @@ export default function App() {
     }
   }, []);
 
-  // --- POMODORO CLOCK TICK ENGINE ---
+  // Sync clock face instantly whenever you swap your configuration dropdown value
+  useEffect(() => {
+    if (!timerRunning && !isBreak) {
+      setTimeLeft(selectedDuration * 60);
+    }
+  }, [selectedDuration, timerRunning, isBreak]);
+
+  // Pomodoro Engine Tick Handlers
   useEffect(() => {
     if (timerRunning) {
       timerRef.current = setInterval(() => {
@@ -55,8 +63,8 @@ export default function App() {
             const nextIsBreak = !isBreak;
             setIsBreak(nextIsBreak);
             setTimerRunning(false);
-            alert(nextIsBreak ? "🔔 Focus session complete! Take a 5-minute break." : "⏳ Break over! Back to deep learning focus.");
-            return nextIsBreak ? 5 * 60 : 25 * 60;
+            alert(nextIsBreak ? "🔔 Focus interval complete! Rest time." : "⏳ Interval complete! Step back into focus.");
+            return nextIsBreak ? 5 * 60 : selectedDuration * 60;
           }
           return prev - 1;
         });
@@ -65,7 +73,7 @@ export default function App() {
       clearInterval(timerRef.current);
     }
     return () => clearInterval(timerRef.current);
-  }, [timerRunning, isBreak]);
+  }, [timerRunning, isBreak, selectedDuration]);
 
   const formatTimerTime = (seconds) => {
     const mins = Math.floor(seconds / 60);
@@ -76,7 +84,7 @@ export default function App() {
   const resetTimer = () => {
     setTimerRunning(false);
     setIsBreak(false);
-    setTimeLeft(25 * 60);
+    setTimeLeft(selectedDuration * 60);
   };
 
   // Progress Metrics Computations
@@ -86,15 +94,14 @@ export default function App() {
   }, 0) : 0;
   const completionPercentage = totalSlotsCount > 0 ? Math.round((completedSlotsCount / totalSlotsCount) * 100) : 0;
 
-  // Active Recall Flashcard Map Lookups
+  // Flashcards Dataset compiler 
   const generateFlashcardPrompt = (topic) => {
     if (!topic) return { question: "General review?", answer: "Consult core parameters." };
     const clean = topic.toLowerCase();
-    
     if (clean.includes("recurrence") || clean.includes("master method") || clean.includes("substitution")) {
       return {
         question: "When does the Master Method fail to evaluate a recurrence relation?",
-        answer: "It fails if the recurrence function is not polynomial, if the ratio f(n)/n^(log_a b) is not polynomial, or if the regularity condition fails for Case 3."
+        answer: "It fails if the recurrence function is not polynomial, if the ratio is not polynomial, or if the regularity condition fails for Case 3."
       };
     }
     if (clean.includes("divide and conquer") || clean.includes("merge") || clean.includes("quick")) {
@@ -107,12 +114,6 @@ export default function App() {
       return {
         question: "What defining optimization rule separates Greedy Choices from Dynamic Programming?",
         answer: "Greedy choice heuristics make locally optimal decisions at each step without reviewing future subproblems. Dynamic Programming solves all overlapping subproblems first and builds up globally."
-      };
-    }
-    if (clean.includes("dynamic") || clean.includes("floyd") || clean.includes("bellman")) {
-      return {
-        question: "Why would you select the Bellman-Ford SSSP algorithm over Dijkstra's model?",
-        answer: "Bellman-Ford accurately computes networks containing negative edge weights and flags negative-weight cycles, whereas Dijkstra's relaxation step produces corrupt tracking loops if negative paths are present."
       };
     }
     return {
@@ -279,14 +280,6 @@ export default function App() {
       alert(`❌ Sync Intercepted. Ensure your local Uvicorn FastAPI process is running smoothly on port 8000.`);
     } finally {
       setLoading(false);
-    }
-  };
-
-  const toggleSlot = (id) => {
-    if (checkedSlots.includes(id)) {
-      setCheckedSlots(checkedSlots.filter(slotId => slotId !== id));
-    } else {
-      setCheckedSlots([...checkedSlots, id]);
     }
   };
 
@@ -530,7 +523,7 @@ export default function App() {
             </div>
           )}
 
-          {/* Collapsible Slide-Out Recall, Notes, and Pomodoro Sidebar Drawer */}
+          {/* Collapsible Slide-Out Recall, Notes, and Configurable Pomodoro Sidebar Drawer */}
           {activeNoteSlot && (() => {
             const currentFlashcard = generateFlashcardPrompt(activeNoteSlot.parentTopic);
             return (
@@ -548,29 +541,54 @@ export default function App() {
                   </button>
                 </div>
 
-                {/* --- POMODORO TIMER DASHBOARD HEADER WIDGET --- */}
-                <div className={`border rounded-xl p-3.5 flex items-center justify-between shadow-md transition-all ${isBreak ? 'bg-emerald-950/20 border-emerald-500/30' : 'bg-slate-950/80 border-slate-800/80'}`}>
-                  <div className="space-y-0.5">
-                    <span className={`text-[10px] font-extrabold tracking-widest uppercase font-mono ${isBreak ? 'text-emerald-400' : 'text-indigo-400'}`}>
-                      {isBreak ? "☕ Rest Interval" : "⏱️ Deep Focus Block"}
-                    </span>
-                    <div className="text-2xl font-black font-mono tracking-tight text-slate-100">
-                      {formatTimerTime(timeLeft)}
+                {/* --- CONFIGURABLE POMODORO TIMER PANEL --- */}
+                <div className="bg-slate-950/80 border border-slate-800/80 rounded-xl p-4 shadow-md flex flex-col gap-3">
+                  <div className="flex items-center justify-between border-b border-slate-900/80 pb-2">
+                    <div className="space-y-0.5">
+                      <span className={`text-[10px] font-extrabold tracking-widest uppercase font-mono ${isBreak ? 'text-emerald-400' : 'text-indigo-400'}`}>
+                        {isBreak ? "☕ Rest Interval" : "⏱️ Deep Focus Block"}
+                      </span>
+                      <div className="text-2xl font-black font-mono tracking-tight text-slate-100">
+                        {formatTimerTime(timeLeft)}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => setTimerRunning(!timerRunning)}
+                        className={`p-2 rounded-lg border transition-all ${timerRunning ? 'bg-amber-950/40 border-amber-500/30 text-amber-400' : 'bg-indigo-950/40 border-indigo-500/30 text-indigo-400'}`}
+                      >
+                        {timerRunning ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={resetTimer}
+                        className="p-2 rounded-lg border border-slate-800 bg-slate-900 hover:border-slate-700 text-slate-400 transition-all"
+                      >
+                        <RotateCcw className="w-4 h-4" />
+                      </button>
                     </div>
                   </div>
-                  <div className="flex items-center gap-1.5">
-                    <button
-                      onClick={() => setTimerRunning(!timerRunning)}
-                      className={`p-2 rounded-lg border transition-all ${timerRunning ? 'bg-amber-950/40 border-amber-500/30 text-amber-400' : 'bg-indigo-950/40 border-indigo-500/30 text-indigo-400'}`}
+
+                  {/* Dynamic Time Duration Target Select Options Dropdown */}
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-slate-400 font-medium flex items-center gap-1">
+                      <Sliders className="w-3.5 h-3.5 text-indigo-500" />
+                      Set Focus Length:
+                    </span>
+                    <select
+                      value={selectedDuration}
+                      onChange={(e) => {
+                        const val = parseInt(e.target.value, 10);
+                        setSelectedDuration(val);
+                      }}
+                      disabled={timerRunning || isBreak}
+                      className="bg-slate-900 border border-slate-800 text-slate-200 rounded px-2 py-1 font-mono focus:outline-none focus:ring-1 focus:ring-indigo-500 disabled:opacity-50 text-[11px]"
                     >
-                      {timerRunning ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
-                    </button>
-                    <button
-                      onClick={resetTimer}
-                      className="p-2 rounded-lg border border-slate-800 bg-slate-900 hover:border-slate-700 text-slate-400 transition-all"
-                    >
-                      <RotateCcw className="w-4 h-4" />
-                    </button>
+                      <option value={15}>15 Minutes (Sprint)</option>
+                      <option value={25}>25 Minutes (Standard)</option>
+                      <option value= {45}>45 Minutes (Deep Dive)</option>
+                    </select>
                   </div>
                 </div>
 
@@ -601,7 +619,7 @@ export default function App() {
                 </div>
 
                 {/* Section 2: Studio Study Notebook Area */}
-                <div className="flex-1 flex flex-col gap-2 min-h-[180px]">
+                <div className="flex-1 flex flex-col gap-2 min-h-[150px]">
                   <label className="text-xs font-semibold text-slate-400 flex items-center gap-1.5">
                     <FileText className="w-3.5 h-3.5 text-indigo-400" />
                     Personal Studio Study Notes
