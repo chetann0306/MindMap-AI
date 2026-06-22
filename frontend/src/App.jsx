@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Brain, Calendar, BookOpen, Layers, Clock, CheckCircle, Circle, Upload, FileText, Loader2, RefreshCw, BarChart2, Download, FileEdit, X, Save, HelpCircle, Eye, Play, Pause, RotateCcw, Sliders, AlertTriangle, Filter } from 'lucide-react';
+import { Brain, Calendar, BookOpen, Layers, Clock, CheckCircle, Circle, Upload, FileText, Loader2, RefreshCw, BarChart2, Download, FileEdit, X, Save, HelpCircle, Eye, Play, Pause, RotateCcw, Sliders, AlertTriangle, Filter, Flag } from 'lucide-react';
 import * as pdfjsLib from 'pdfjs-dist';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version || '3.11.174'}/build/pdf.worker.min.js`;
@@ -14,8 +14,7 @@ export default function App() {
   const [activeNoteSlot, setActiveNoteSlot] = useState(null);
   const fileInputRef = useRef(null);
   
-  // --- DIFFICULTY FILTER STATE ---
-  const [difficultyFilter, setDifficultyFilter] = useState('ALL'); // ALL, EASY, MEDIUM, HARD
+  const [difficultyFilter, setDifficultyFilter] = useState('ALL');
 
   // Pomodoro States
   const [selectedDuration, setSelectedDuration] = useState(25);
@@ -24,23 +23,26 @@ export default function App() {
   const [isBreak, setIsBreak] = useState(false);
   const timerRef = useRef(null);
 
-  // --- UPDATED ACCURATE ACADEMIC COUNTDOWNS ---
-  const [countdownMetrics, setCountdownMetrics] = useState({ mteDays: 0, eteDays: 0 });
+  // Accurate Academic Countdowns 
+  const [countdownMetrics, setCountdownMetrics] = useState({ mteDays: 0, eteDays: 0, totalMteProgress: 0 });
 
   useEffect(() => {
     const calculateCountdown = () => {
       const now = new Date();
-      // SEPTEMBER 18, 2026 (Month index 8)
-      const mteTarget = new Date(2026, 8, 18, 9, 0, 0); 
-      // NOVEMBER 18, 2026 (Month index 10)
-      const eteTarget = new Date(2026, 10, 18, 9, 0, 0); 
+      const mteTarget = new Date(2026, 8, 18, 9, 0, 0); // Sept 18
+      const eteTarget = new Date(2026, 10, 18, 9, 0, 0); // Nov 18
 
       const mteDiffTime = mteTarget - now;
       const eteDiffTime = eteTarget - now;
 
+      const totalSemesterDuration = 90 * 24 * 60 * 60 * 1000; 
+      const currentPassedMteTime = totalSemesterDuration - mteDiffTime;
+      const mteProgressPercent = Math.min(100, Math.max(0, Math.round((currentPassedMteTime / totalSemesterDuration) * 100)));
+
       setCountdownMetrics({
         mteDays: Math.max(0, Math.ceil(mteDiffTime / (1000 * 60 * 60 * 24))),
-        eteDays: Math.max(0, Math.ceil(eteDiffTime / (1000 * 60 * 60 * 24)))
+        eteDays: Math.max(0, Math.ceil(eteDiffTime / (1000 * 60 * 60 * 24))),
+        totalMteProgress: mteProgressPercent
       });
     };
 
@@ -113,7 +115,6 @@ export default function App() {
     setTimeLeft(selectedDuration * 60);
   };
 
-  // --- AUTOMATIC DIFFICULTY TAG ASSIGNMENT ENGINE ---
   const getTopicDifficulty = (topic) => {
     const clean = topic.toLowerCase();
     if (clean.includes("dynamic") || clean.includes("np") || clean.includes("bound") || clean.includes("backtracking") || clean.includes("floyd") || clean.includes("bellman")) {
@@ -134,7 +135,7 @@ export default function App() {
   const generateFlashcardPrompt = (topic) => {
     if (!topic) return { question: "General review?", answer: "Consult core parameters." };
     const clean = topic.toLowerCase();
-    if (clean.includes("recurrence") || clean.includes("master method") || clean.includes("substitution")) {
+    if (clean.includes("recurrence") || clean.includes("master" ) || clean.includes("substitution")) {
       return {
         question: "When does the Master Method fail to evaluate a recurrence relation?",
         answer: "It fails if the recurrence function is not polynomial, if the ratio is not polynomial, or if the regularity condition fails for Case 3."
@@ -146,9 +147,21 @@ export default function App() {
         answer: "Quick Sort drops to O(n²) efficiency if partitions are heavily skewed, whereas Merge Sort guarantees a strict O(n log n) bound but demands O(n) extra helper memory space."
       };
     }
+    if (clean.includes("regression") || clean.includes("gradient descent")) {
+      return {
+        question: "Derive the gradient descent update rule for a Mean Squared Error (MSE) loss function in multiple linear regression.",
+        answer: "w = w - alpha * (2/n) * X^T * (Xw - y). It step-corrects weights in the direction of the steepest negative loss gradient descent."
+      };
+    }
+    if (clean.includes("svm") || clean.includes("kernel") || clean.includes("hyperplane")) {
+      return {
+        question: "What is the specific computational purpose of the Kernel Trick in SVM models?",
+        answer: "It maps lower-dimensional non-linearly separable data into a higher-dimensional feature space where a clean linear maximum-margin split becomes possible, avoiding expensive inner product scaling."
+      };
+    }
     return {
-      question: `What are the typical space and time efficiency bounds when implementing: "${topic}"?`,
-      answer: "Requires checking the worst-case asymptotic upper bounds (Big-O) and managing call stack recursive overhead layers cleanly."
+      question: `What are the typical validation parameters and runtime efficiency boundaries when implementing: "${topic}"?`,
+      answer: "Requires analyzing step features, validation matrix splits, parameter loss convergences, or computational upper bounds."
     };
   };
 
@@ -196,7 +209,7 @@ export default function App() {
           `DTSTAMP:${formattedBaseDate}T000000Z`,
           `DTSTART:${formattedBaseDate}T${startHour}${startMin}00`,
           `DTEND:${formattedBaseDate}T${endHour}${endMin}00`,
-          `SUMMARY:[DAA Study Plan] ${day.topic} (${slot.subtopic})`,
+          `SUMMARY:[Study Plan] ${day.topic} (${slot.subtopic})`,
           `DESCRIPTION:${slot.task.replace(/,/g, '\\,')}`,
           "STATUS:CONFIRMED",
           "SEQUENCE:0",
@@ -211,7 +224,7 @@ export default function App() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.setAttribute("download", "MindMap_Algorithms_StudyPlan.ics");
+    link.setAttribute("download", "MindMap_StudyPlan.ics");
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -274,7 +287,7 @@ export default function App() {
       
       const dateLabels = generateDatesArray(parseInt(days, 10));
       const structuredDays = dateLabels.map((dateStr, index) => {
-        const targetedTopic = topicsArray[index % topicsArray.length] || "Advanced Core Algorithm Synthesis";
+        const targetedTopic = topicsArray[index % topicsArray.length] || "Advanced Core System Synthesis";
         
         return {
           dayNumber: index + 1,
@@ -284,20 +297,20 @@ export default function App() {
             { 
               id: `day-${index + 1}-slot-1`,
               time: "09:30 AM - 11:30 AM", 
-              subtopic: "Mathematical Analysis & Proofs",
-              task: `Analyze performance bounds, verify edge complexities, and map core design constraints for: ${targetedTopic}.` 
+              subtopic: "Mathematical Analysis & Concepts",
+              task: `Analyze performance bounds, verify equations, and map core constraints for: ${targetedTopic}.` 
             },
             { 
               id: `day-${index + 1}-slot-2`,
               time: "02:00 PM - 04:30 PM", 
               subtopic: "Implementation Lab",
-              task: `Write correctness models, construct functional trace trees, and practice tracking execution metrics for: ${targetedTopic}.` 
+              task: `Write correctness models, construct tracking schemas, and review validation arrays for: ${targetedTopic}.` 
             },
             { 
               id: `day-${index + 1}-slot-3`,
               time: "07:30 PM - 09:00 PM", 
               subtopic: "Active Recall",
-              task: `Practice engineering design scenario workflows, work through past assessment templates, and target key retrieval prompts.` 
+              task: `Practice core evaluation structures, work through past assessment templates, and target layout retrieval prompts.` 
             }
           ]
         };
@@ -358,7 +371,7 @@ export default function App() {
         {/* Left Interactive Control Dock */}
         <div className="lg:col-span-1 bg-slate-900/60 border border-slate-800/80 rounded-2xl p-6 backdrop-blur-xl shadow-2xl space-y-6">
           
-          {/* Evaluation Countdowns Panel */}
+          {/* Evaluation Countdowns */}
           <div className="bg-slate-950/50 border border-slate-800 rounded-xl p-4 flex flex-col gap-3">
             <div className="flex items-center gap-2 text-xs font-bold text-slate-400 uppercase tracking-wider">
               <AlertTriangle className="w-4 h-4 text-amber-500 animate-pulse" />
@@ -383,7 +396,7 @@ export default function App() {
             </label>
             <div 
               onClick={() => fileInputRef.current.click()}
-              className="border-2 border-dashed border-slate-800 hover:border-indigo-500/40 bg-slate-950/40 rounded-xl p-5 canvas-center text-center cursor-pointer transition-all hover:bg-slate-950/80 group flex flex-col items-center justify-center relative overflow-hidden"
+              className="border-2 border-dashed border-slate-800 hover:border-indigo-500/40 bg-slate-950/40 rounded-xl p-5 text-center cursor-pointer transition-all hover:bg-slate-950/80 group flex flex-col items-center justify-center relative overflow-hidden"
             >
               <input type="file" ref={fileInputRef} onChange={handleFileUpload} accept="application/pdf" className="hidden" />
               <FileText className="w-8 h-8 text-slate-600 group-hover:text-indigo-400 transition-colors mb-2" />
@@ -403,7 +416,7 @@ export default function App() {
               <textarea
                 value={topics}
                 onChange={(e) => setTopics(e.target.value)}
-                placeholder="Parsed algorithm blocks appear here..."
+                placeholder="Parsed syllabus blocks appear here..."
                 className="w-full h-52 bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 transition-all resize-none text-[11px] font-mono leading-relaxed bg-opacity-40"
               />
             </div>
@@ -466,6 +479,30 @@ export default function App() {
             )}
           </div>
 
+          {/* Semester Milestone Progress Timeline Tracker */}
+          {scheduleData && (
+            <div className="bg-slate-950/40 border border-slate-900 rounded-xl p-4 mb-4 flex flex-col gap-3">
+              <div className="flex items-center gap-1.5 text-[10px] font-extrabold tracking-wider text-slate-400 uppercase">
+                <Flag className="w-3.5 h-3.5 text-indigo-400" />
+                <span>Semester Milestone Grid</span>
+              </div>
+              <div className="relative w-full bg-slate-900 h-1 rounded-full my-2 flex items-center justify-between">
+                <div 
+                  className="absolute left-0 top-0 h-full bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full" 
+                  style={{ width: `${countdownMetrics.totalMteProgress}%` }}
+                />
+                <div className="absolute w-2.5 h-2.5 rounded-full bg-indigo-500 border-2 border-slate-950 left-0" title="Start" />
+                <div className={`absolute w-2.5 h-2.5 rounded-full border-2 border-slate-950 left-[60%] ${countdownMetrics.mteDays === 0 ? 'bg-emerald-500' : 'bg-amber-500 animate-ping'}`} title="Mid-Terms" />
+                <div className="absolute w-2.5 h-2.5 rounded-full bg-rose-500 border-2 border-slate-950 right-0" title="Finals" />
+              </div>
+              <div className="flex items-center justify-between text-[10px] font-mono text-slate-500 font-bold">
+                <span>START</span>
+                <span className="text-amber-400/80">SEP 18 (MTE)</span>
+                <span className="text-rose-400/80">NOV 18 (ETE)</span>
+              </div>
+            </div>
+          )}
+
           {/* Progress Tracker Dashboard Bar */}
           {scheduleData && (
             <div className="bg-slate-950/80 border border-slate-800/70 rounded-xl p-4 mb-4 shadow-lg backdrop-blur-md flex flex-col gap-2">
@@ -487,7 +524,7 @@ export default function App() {
             </div>
           )}
 
-          {/* --- SYLLABUS COMPLEXITY FILTERS HEADER TOOLBAR --- */}
+          {/* Complexity Filters Toolbar */}
           {scheduleData && (
             <div className="flex flex-wrap items-center gap-1.5 mb-5 bg-slate-950/40 p-2 border border-slate-900 rounded-xl">
               <span className="text-[10px] font-extrabold tracking-wider text-slate-500 uppercase px-2 flex items-center gap-1">
@@ -526,7 +563,6 @@ export default function App() {
                           <h3 className="text-sm font-extrabold text-slate-100 tracking-tight capitalize truncate max-w-xs md:max-w-md">{item.topic}</h3>
                         </div>
                         <div className="flex items-center gap-2 shrink-0">
-                          {/* Difficulty Badge Node */}
                           <span className={`text-[9px] font-black tracking-widest px-2 py-0.5 rounded border font-mono ${
                             difficulty === 'HARD' ? 'bg-rose-950/30 border-rose-900/50 text-rose-400' :
                             difficulty === 'MEDIUM' ? 'bg-amber-950/30 border-amber-900/50 text-amber-400' :
@@ -562,7 +598,7 @@ export default function App() {
                                 )}
                               </div>
 
-                              <div className="flex-1 space-y-1 pr-8">
+                              <div className="flex-1 space-y-1 pr-12">
                                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                                   <div className={`flex items-center gap-2 text-xs font-bold font-mono ${isChecked ? 'text-emerald-500/70' : 'text-purple-400'}`}>
                                     <Clock className="w-3.5 h-3.5" />
@@ -586,17 +622,19 @@ export default function App() {
                                 )}
                               </div>
 
+                              {/* --- PERMANENTLY VISIBLE MOCK TEST / SIDEPANEL BUTTON --- */}
                               <button
                                 onClick={(e) => openNotepadSidebar(e, slot, item.topic)}
-                                className={`absolute right-4 top-1/2 -translate-y-1/2 p-2 rounded-lg border border-slate-800 bg-slate-950/80 transition-all ${
+                                className={`absolute right-4 top-1/2 -translate-y-1/2 p-2 rounded-lg border bg-slate-950/80 transition-all z-10 ${
                                   hasNotes 
-                                    ? 'text-indigo-400 opacity-100 border-indigo-500/30' 
-                                    : 'text-slate-500 opacity-0 group-hover:opacity-100 hover:text-indigo-400 hover:border-slate-700'
+                                    ? 'text-indigo-400 border-indigo-500/30' 
+                                    : 'text-slate-400 border-slate-800 hover:text-indigo-400 hover:border-slate-700'
                                 }`}
-                                title="Workspace Drawer"
+                                title="Open Active Recall Workspace"
                               >
                                 <FileEdit className="w-4 h-4" />
                               </button>
+
                             </div>
                           );
                         })}
@@ -635,7 +673,7 @@ export default function App() {
                   </button>
                 </div>
 
-                {/* Pomodoro Panel */}
+                {/* Configurable Pomodoro Panel */}
                 <div className="bg-slate-950/80 border border-slate-800/80 rounded-xl p-4 shadow-md flex flex-col gap-3">
                   <div className="flex items-center justify-between border-b border-slate-900/80 pb-2">
                     <div className="space-y-0.5">
@@ -685,7 +723,7 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* Section 1: Flashcard Deck Card */}
+                {/* Section 1: Flashcard Mock Test Component */}
                 <div className="bg-slate-950/60 border border-slate-800/80 rounded-xl p-4 space-y-3 shadow-inner">
                   <div className="flex items-center gap-2 text-xs font-semibold text-purple-400">
                     <HelpCircle className="w-3.5 h-3.5" />
