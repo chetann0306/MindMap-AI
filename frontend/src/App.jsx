@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Brain, Calendar, BookOpen, Layers, Clock, CheckCircle, Circle, Upload, FileText, Loader2, RefreshCw, BarChart2, Download, FileEdit, X, Save, HelpCircle, Eye, Play, Pause, RotateCcw, Sliders } from 'lucide-react';
+import { Brain, Calendar, BookOpen, Layers, Clock, CheckCircle, Circle, Upload, FileText, Loader2, RefreshCw, BarChart2, Download, FileEdit, X, Save, HelpCircle, Eye, Play, Pause, RotateCcw, Sliders, AlertTriangle } from 'lucide-react';
 import * as pdfjsLib from 'pdfjs-dist';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version || '3.11.174'}/build/pdf.worker.min.js`;
@@ -14,12 +14,38 @@ export default function App() {
   const [activeNoteSlot, setActiveNoteSlot] = useState(null);
   const fileInputRef = useRef(null);
   
-  // --- POMODORO CORE CONFIGURABLE STATES ---
-  const [selectedDuration, setSelectedDuration] = useState(25); // Configurable length tier (Minutes)
+  // Pomodoro States
+  const [selectedDuration, setSelectedDuration] = useState(25);
   const [timeLeft, setTimeLeft] = useState(25 * 60); 
   const [timerRunning, setTimerRunning] = useState(false);
   const [isBreak, setIsBreak] = useState(false);
   const timerRef = useRef(null);
+
+  // Exam Countdowns
+  const [countdownMetrics, setCountdownMetrics] = useState({ mteDays: 0, eteDays: 0 });
+
+  useEffect(() => {
+    const calculateCountdown = () => {
+      const now = new Date();
+      const mteTarget = new Date(now.getFullYear(), 9, 12, 9, 0, 0); 
+      const eteTarget = new Date(now.getFullYear(), 11, 1, 9, 0, 0); 
+
+      if (now > mteTarget) mteTarget.setFullYear(mteTarget.getFullYear() + 1);
+      if (now > eteTarget) eteTarget.setFullYear(eteTarget.getFullYear() + 1);
+
+      const mteDiffTime = mteTarget - now;
+      const eteDiffTime = eteTarget - now;
+
+      setCountdownMetrics({
+        mteDays: Math.ceil(mteDiffTime / (1000 * 60 * 60 * 24)),
+        eteDays: Math.ceil(eteDiffTime / (1000 * 60 * 60 * 24))
+      });
+    };
+
+    calculateCountdown();
+    const interval = setInterval(calculateCountdown, 60000);
+    return () => clearInterval(interval);
+  }, []);
 
   const [checkedSlots, setCheckedSlots] = useState(() => {
     const saved = localStorage.getItem('mindmap_checked_slots');
@@ -46,14 +72,12 @@ export default function App() {
     }
   }, []);
 
-  // Sync clock face instantly whenever you swap your configuration dropdown value
   useEffect(() => {
     if (!timerRunning && !isBreak) {
       setTimeLeft(selectedDuration * 60);
     }
   }, [selectedDuration, timerRunning, isBreak]);
 
-  // Pomodoro Engine Tick Handlers
   useEffect(() => {
     if (timerRunning) {
       timerRef.current = setInterval(() => {
@@ -87,14 +111,12 @@ export default function App() {
     setTimeLeft(selectedDuration * 60);
   };
 
-  // Progress Metrics Computations
   const totalSlotsCount = scheduleData ? scheduleData.reduce((acc, day) => acc + day.slots.length, 0) : 0;
   const completedSlotsCount = scheduleData ? scheduleData.reduce((acc, day) => {
     return acc + day.slots.filter(slot => checkedSlots.includes(slot.id)).length;
   }, 0) : 0;
   const completionPercentage = totalSlotsCount > 0 ? Math.round((completedSlotsCount / totalSlotsCount) * 100) : 0;
 
-  // Flashcards Dataset compiler 
   const generateFlashcardPrompt = (topic) => {
     if (!topic) return { question: "General review?", answer: "Consult core parameters." };
     const clean = topic.toLowerCase();
@@ -108,12 +130,6 @@ export default function App() {
       return {
         question: "What is the primary worst-case performance trade-off of Quick Sort vs. Merge Sort?",
         answer: "Quick Sort drops to O(n²) efficiency if partitions are heavily skewed, whereas Merge Sort guarantees a strict O(n log n) bound but demands O(n) extra helper memory space."
-      };
-    }
-    if (clean.includes("greedy") || clean.includes("knapsack") || clean.includes("spanning")) {
-      return {
-        question: "What defining optimization rule separates Greedy Choices from Dynamic Programming?",
-        answer: "Greedy choice heuristics make locally optimal decisions at each step without reviewing future subproblems. Dynamic Programming solves all overlapping subproblems first and builds up globally."
       };
     }
     return {
@@ -283,8 +299,17 @@ export default function App() {
     }
   };
 
+  // --- FIXED CHECKBOX TOGGLE ACTION ENGINE ---
+  const handleCardClick = (slotId) => {
+    if (checkedSlots.includes(slotId)) {
+      setCheckedSlots(checkedSlots.filter(id => id !== slotId));
+    } else {
+      setCheckedSlots([...checkedSlots, slotId]);
+    }
+  };
+
   const openNotepadSidebar = (e, slot, parentTopicName) => {
-    e.stopPropagation(); 
+    e.stopPropagation(); // Stops the click from ticking/unticking the checkbox
     setRevealAnswer(false); 
     setActiveNoteSlot({ ...slot, parentTopic: parentTopicName });
   };
@@ -319,6 +344,25 @@ export default function App() {
         
         {/* Left Interactive Control Dock */}
         <div className="lg:col-span-1 bg-slate-900/60 border border-slate-800/80 rounded-2xl p-6 backdrop-blur-xl shadow-2xl space-y-6">
+          
+          {/* Evaluation Countdowns */}
+          <div className="bg-slate-950/50 border border-slate-800 rounded-xl p-4 flex flex-col gap-3">
+            <div className="flex items-center gap-2 text-xs font-bold text-slate-400 uppercase tracking-wider">
+              <AlertTriangle className="w-4 h-4 text-amber-500 animate-pulse" />
+              <span>Evaluation Countdowns</span>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="bg-slate-900/60 border border-slate-800/60 rounded-lg p-3 text-center">
+                <p className="text-[10px] font-bold text-slate-500 uppercase">Mid-Term (MTE)</p>
+                <p className="text-xl font-black text-amber-400 font-mono mt-0.5">{countdownMetrics.mteDays}d</p>
+              </div>
+              <div className="bg-slate-900/60 border border-slate-800/60 rounded-lg p-3 text-center">
+                <p className="text-[10px] font-bold text-slate-500 uppercase">End-Term (ETE)</p>
+                <p className="text-xl font-black text-rose-500 font-mono mt-0.5">{countdownMetrics.eteDays}d</p>
+              </div>
+            </div>
+          </div>
+
           <div>
             <label className="flex items-center gap-2 text-sm font-semibold text-slate-300 mb-2">
               <Upload className="w-4 h-4 text-indigo-400" />
@@ -454,7 +498,7 @@ export default function App() {
                       return (
                         <div 
                           key={slot.id} 
-                          onClick={() => toggleSlot(slot.id)}
+                          onClick={() => handleCardClick(slot.id)}
                           className={`border rounded-xl p-4 cursor-pointer transition-all flex items-start gap-4 select-none group relative ${
                             isChecked 
                               ? 'bg-emerald-950/10 border-emerald-500/30 shadow-inner opacity-60' 
@@ -541,7 +585,7 @@ export default function App() {
                   </button>
                 </div>
 
-                {/* --- CONFIGURABLE POMODORO TIMER PANEL --- */}
+                {/* Pomodoro Panel */}
                 <div className="bg-slate-950/80 border border-slate-800/80 rounded-xl p-4 shadow-md flex flex-col gap-3">
                   <div className="flex items-center justify-between border-b border-slate-900/80 pb-2">
                     <div className="space-y-0.5">
@@ -570,7 +614,6 @@ export default function App() {
                     </div>
                   </div>
 
-                  {/* Dynamic Time Duration Target Select Options Dropdown */}
                   <div className="flex items-center justify-between text-xs">
                     <span className="text-slate-400 font-medium flex items-center gap-1">
                       <Sliders className="w-3.5 h-3.5 text-indigo-500" />
@@ -587,7 +630,7 @@ export default function App() {
                     >
                       <option value={15}>15 Minutes (Sprint)</option>
                       <option value={25}>25 Minutes (Standard)</option>
-                      <option value= {45}>45 Minutes (Deep Dive)</option>
+                      <option value={45}>45 Minutes (Deep Dive)</option>
                     </select>
                   </div>
                 </div>
