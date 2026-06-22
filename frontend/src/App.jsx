@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Brain, Calendar, BookOpen, Layers, Clock, CheckCircle, Circle, Upload, FileText, Loader2, RefreshCw } from 'lucide-react';
+import { Brain, Calendar, BookOpen, Layers, Clock, CheckCircle, Circle, Upload, FileText, Loader2, RefreshCw, BarChart2 } from 'lucide-react';
 
 export default function App() {
   const [topics, setTopics] = useState('');
@@ -25,6 +25,13 @@ export default function App() {
     }
   }, []);
 
+  // --- PROGRESS METRICS CALCULATION ---
+  const totalSlotsCount = scheduleData ? scheduleData.reduce((acc, day) => acc + day.slots.length, 0) : 0;
+  const completedSlotsCount = scheduleData ? scheduleData.reduce((acc, day) => {
+    return acc + day.slots.filter(slot => checkedSlots.includes(slot.id)).length;
+  }, 0) : 0;
+  const completionPercentage = totalSlotsCount > 0 ? Math.round((completedSlotsCount / totalSlotsCount) * 100) : 0;
+
   const generateDatesArray = (totalDays) => {
     const dates = [];
     const options = { weekday: 'short', month: 'short', day: 'numeric' };
@@ -36,7 +43,6 @@ export default function App() {
     return dates;
   };
 
-  // Secure Server-Backed Upload Handler
   const handleFileUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -51,7 +57,7 @@ export default function App() {
         body: formData,
       });
 
-      if (!response.ok) throw new Error(`Server returned error code: ${response.status}`);
+      if (!response.ok) throw new Error(`Server error code: ${response.status}`);
       const data = await response.json();
       
       if (data.status === "Success") {
@@ -105,7 +111,7 @@ export default function App() {
               id: `day-${index + 1}-slot-1`,
               time: "09:30 AM - 11:30 AM", 
               subtopic: "Mathematical Analysis & Proofs",
-              task: `Analyze asymptotic performance bounds, verify edge complexities, and map core design constraints for: ${targetedTopic}.` 
+              task: `Analyze performance bounds, verify edge complexities, and map core design constraints for: ${targetedTopic}.` 
             },
             { 
               id: `day-${index + 1}-slot-2`,
@@ -230,7 +236,7 @@ export default function App() {
 
         {/* Right Output Roadmap Viewport Container */}
         <div className="lg:col-span-2 bg-slate-900/40 border border-slate-800/50 rounded-2xl p-6 backdrop-blur-xl min-h-[550px] flex flex-col shadow-2xl">
-          <div className="flex items-center justify-between border-b border-slate-800/60 pb-4 mb-6">
+          <div className="flex items-center justify-between border-b border-slate-800/60 pb-4 mb-4">
             <div className="flex items-center gap-2">
               <Layers className="w-4 h-4 text-slate-400" />
               <h2 className="text-sm font-bold tracking-wider uppercase text-slate-400">Hourly Blueprint Breakdown</h2>
@@ -245,8 +251,30 @@ export default function App() {
             )}
           </div>
 
+          {/* --- GLOWING PROGRESS TRACKER DASHBOARD BAR --- */}
+          {scheduleData && (
+            <div className="bg-slate-950/80 border border-slate-800/70 rounded-xl p-4 mb-6 shadow-lg backdrop-blur-md flex flex-col gap-2">
+              <div className="flex items-center justify-between text-xs font-bold text-slate-300">
+                <div className="flex items-center gap-1.5">
+                  <BarChart2 className="w-4 h-4 text-indigo-400" />
+                  <span>PREPARATION SCORE</span>
+                </div>
+                <span className="font-mono text-indigo-400 bg-indigo-950/50 border border-indigo-900/40 px-2 py-0.5 rounded">
+                  {completedSlotsCount} / {totalSlotsCount} SLOTS ({completionPercentage}%)
+                </span>
+              </div>
+              {/* Dynamic Bar Tracking Layout */}
+              <div className="w-full bg-slate-900 h-2.5 rounded-full overflow-hidden border border-slate-800">
+                <div 
+                  className="bg-gradient-to-r from-indigo-500 via-purple-500 to-emerald-400 h-full rounded-full transition-all duration-500 ease-out shadow-[0_0_12px_rgba(99,102,241,0.4)]"
+                  style={{ width: `${completionPercentage}%` }}
+                />
+              </div>
+            </div>
+          )}
+
           {scheduleData ? (
-            <div className="flex-1 space-y-6 overflow-y-auto max-h-[650px] pr-2">
+            <div className="flex-1 space-y-6 overflow-y-auto max-h-[600px] pr-2">
               {scheduleData.map((item) => (
                 <div key={item.dayNumber} className="bg-slate-950/70 border border-slate-800/90 rounded-xl p-5 hover:border-indigo-500/20 transition-all shadow-xl">
                   
@@ -271,7 +299,7 @@ export default function App() {
                           onClick={() => toggleSlot(slot.id)}
                           className={`border rounded-xl p-4 cursor-pointer transition-all flex items-start gap-4 select-none ${
                             isChecked 
-                              ? 'bg-emerald-950/10 border-emerald-500/30 shadow-inner opacity-60 grayscale-[20%]' 
+                              ? 'bg-emerald-950/10 border-emerald-500/30 shadow-inner opacity-60' 
                               : 'bg-slate-900/20 border-slate-900/60 hover:bg-slate-900/40 hover:border-slate-800'
                           }`}
                         >
