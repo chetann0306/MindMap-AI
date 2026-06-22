@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Brain, Calendar, BookOpen, Layers, Clock, CheckCircle, Circle, Upload, FileText, Loader2, RefreshCw, BarChart2, Download, FileEdit, X, Save, HelpCircle, Eye, Play, Pause, RotateCcw, Sliders, AlertTriangle } from 'lucide-react';
+import { Brain, Calendar, BookOpen, Layers, Clock, CheckCircle, Circle, Upload, FileText, Loader2, RefreshCw, BarChart2, Download, FileEdit, X, Save, HelpCircle, Eye, Play, Pause, RotateCcw, Sliders, AlertTriangle, Filter } from 'lucide-react';
 import * as pdfjsLib from 'pdfjs-dist';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version || '3.11.174'}/build/pdf.worker.min.js`;
@@ -14,6 +14,9 @@ export default function App() {
   const [activeNoteSlot, setActiveNoteSlot] = useState(null);
   const fileInputRef = useRef(null);
   
+  // --- DIFFICULTY FILTER STATE ---
+  const [difficultyFilter, setDifficultyFilter] = useState('ALL'); // ALL, EASY, MEDIUM, HARD
+
   // Pomodoro States
   const [selectedDuration, setSelectedDuration] = useState(25);
   const [timeLeft, setTimeLeft] = useState(25 * 60); 
@@ -21,29 +24,28 @@ export default function App() {
   const [isBreak, setIsBreak] = useState(false);
   const timerRef = useRef(null);
 
-  // Exam Countdowns
+  // --- UPDATED ACCURATE ACADEMIC COUNTDOWNS ---
   const [countdownMetrics, setCountdownMetrics] = useState({ mteDays: 0, eteDays: 0 });
 
   useEffect(() => {
     const calculateCountdown = () => {
       const now = new Date();
-      const mteTarget = new Date(now.getFullYear(), 9, 12, 9, 0, 0); 
-      const eteTarget = new Date(now.getFullYear(), 11, 1, 9, 0, 0); 
-
-      if (now > mteTarget) mteTarget.setFullYear(mteTarget.getFullYear() + 1);
-      if (now > eteTarget) eteTarget.setFullYear(eteTarget.getFullYear() + 1);
+      // SEPTEMBER 18, 2026 (Month index 8)
+      const mteTarget = new Date(2026, 8, 18, 9, 0, 0); 
+      // NOVEMBER 18, 2026 (Month index 10)
+      const eteTarget = new Date(2026, 10, 18, 9, 0, 0); 
 
       const mteDiffTime = mteTarget - now;
       const eteDiffTime = eteTarget - now;
 
       setCountdownMetrics({
-        mteDays: Math.ceil(mteDiffTime / (1000 * 60 * 60 * 24)),
-        eteDays: Math.ceil(eteDiffTime / (1000 * 60 * 60 * 24))
+        mteDays: Math.max(0, Math.ceil(mteDiffTime / (1000 * 60 * 60 * 24))),
+        eteDays: Math.max(0, Math.ceil(eteDiffTime / (1000 * 60 * 60 * 24)))
       });
     };
 
     calculateCountdown();
-    const interval = setInterval(calculateCountdown, 60000);
+    const interval = setInterval(calculateCountdown, 60000); 
     return () => clearInterval(interval);
   }, []);
 
@@ -109,6 +111,18 @@ export default function App() {
     setTimerRunning(false);
     setIsBreak(false);
     setTimeLeft(selectedDuration * 60);
+  };
+
+  // --- AUTOMATIC DIFFICULTY TAG ASSIGNMENT ENGINE ---
+  const getTopicDifficulty = (topic) => {
+    const clean = topic.toLowerCase();
+    if (clean.includes("dynamic") || clean.includes("np") || clean.includes("bound") || clean.includes("backtracking") || clean.includes("floyd") || clean.includes("bellman")) {
+      return "HARD";
+    }
+    if (clean.includes("divide") || clean.includes("greedy") || clean.includes("recurrence") || clean.includes("master") || clean.includes("sort")) {
+      return "MEDIUM";
+    }
+    return "EASY";
   };
 
   const totalSlotsCount = scheduleData ? scheduleData.reduce((acc, day) => acc + day.slots.length, 0) : 0;
@@ -299,7 +313,6 @@ export default function App() {
     }
   };
 
-  // --- FIXED CHECKBOX TOGGLE ACTION ENGINE ---
   const handleCardClick = (slotId) => {
     if (checkedSlots.includes(slotId)) {
       setCheckedSlots(checkedSlots.filter(id => id !== slotId));
@@ -309,7 +322,7 @@ export default function App() {
   };
 
   const openNotepadSidebar = (e, slot, parentTopicName) => {
-    e.stopPropagation(); // Stops the click from ticking/unticking the checkbox
+    e.stopPropagation(); 
     setRevealAnswer(false); 
     setActiveNoteSlot({ ...slot, parentTopic: parentTopicName });
   };
@@ -345,7 +358,7 @@ export default function App() {
         {/* Left Interactive Control Dock */}
         <div className="lg:col-span-1 bg-slate-900/60 border border-slate-800/80 rounded-2xl p-6 backdrop-blur-xl shadow-2xl space-y-6">
           
-          {/* Evaluation Countdowns */}
+          {/* Evaluation Countdowns Panel */}
           <div className="bg-slate-950/50 border border-slate-800 rounded-xl p-4 flex flex-col gap-3">
             <div className="flex items-center gap-2 text-xs font-bold text-slate-400 uppercase tracking-wider">
               <AlertTriangle className="w-4 h-4 text-amber-500 animate-pulse" />
@@ -370,7 +383,7 @@ export default function App() {
             </label>
             <div 
               onClick={() => fileInputRef.current.click()}
-              className="border-2 border-dashed border-slate-800 hover:border-indigo-500/40 bg-slate-950/40 rounded-xl p-5 text-center cursor-pointer transition-all hover:bg-slate-950/80 group flex flex-col items-center justify-center relative overflow-hidden"
+              className="border-2 border-dashed border-slate-800 hover:border-indigo-500/40 bg-slate-950/40 rounded-xl p-5 canvas-center text-center cursor-pointer transition-all hover:bg-slate-950/80 group flex flex-col items-center justify-center relative overflow-hidden"
             >
               <input type="file" ref={fileInputRef} onChange={handleFileUpload} accept="application/pdf" className="hidden" />
               <FileText className="w-8 h-8 text-slate-600 group-hover:text-indigo-400 transition-colors mb-2" />
@@ -455,7 +468,7 @@ export default function App() {
 
           {/* Progress Tracker Dashboard Bar */}
           {scheduleData && (
-            <div className="bg-slate-950/80 border border-slate-800/70 rounded-xl p-4 mb-6 shadow-lg backdrop-blur-md flex flex-col gap-2">
+            <div className="bg-slate-950/80 border border-slate-800/70 rounded-xl p-4 mb-4 shadow-lg backdrop-blur-md flex flex-col gap-2">
               <div className="flex items-center justify-between text-xs font-bold text-slate-300">
                 <div className="flex items-center gap-1.5">
                   <BarChart2 className="w-4 h-4 text-indigo-400" />
@@ -474,87 +487,124 @@ export default function App() {
             </div>
           )}
 
-          {scheduleData ? (
-            <div className="flex-1 space-y-6 overflow-y-auto max-h-[600px] pr-2">
-              {scheduleData.map((item) => (
-                <div key={item.dayNumber} className="bg-slate-950/70 border border-slate-800/90 rounded-xl p-5 hover:border-indigo-500/20 transition-all shadow-xl">
-                  
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-900 pb-3 mb-4">
-                    <div className="flex items-center gap-3">
-                      <div className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-mono text-xs px-3 py-1 rounded-md font-extrabold shadow-sm">
-                        DAY {item.dayNumber}
-                      </div>
-                      <h3 className="text-sm font-extrabold text-slate-100 tracking-tight capitalize truncate max-w-xs md:max-w-md">{item.topic}</h3>
-                    </div>
-                    <span className="text-xs font-bold text-indigo-400 font-mono bg-indigo-950/40 border border-indigo-900/40 px-3 py-1 rounded-md shrink-0">
-                      {item.date}
-                    </span>
-                  </div>
-
-                  <div className="space-y-4">
-                    {item.slots.map((slot) => {
-                      const isChecked = checkedSlots.includes(slot.id);
-                      const hasNotes = slotNotes[slot.id] && slotNotes[slot.id].trim().length > 0;
-                      return (
-                        <div 
-                          key={slot.id} 
-                          onClick={() => handleCardClick(slot.id)}
-                          className={`border rounded-xl p-4 cursor-pointer transition-all flex items-start gap-4 select-none group relative ${
-                            isChecked 
-                              ? 'bg-emerald-950/10 border-emerald-500/30 shadow-inner opacity-60' 
-                              : 'bg-slate-900/20 border-slate-900/60 hover:bg-slate-900/40 hover:border-slate-800'
-                          }`}
-                        >
-                          <div className="mt-0.5 shrink-0 transition-all duration-200">
-                            {isChecked ? (
-                              <CheckCircle className="w-5 h-5 text-emerald-400 fill-emerald-950/50" />
-                            ) : (
-                              <Circle className="w-5 h-5 text-slate-600 hover:text-indigo-400" />
-                            )}
-                          </div>
-
-                          <div className="flex-1 space-y-1 pr-8">
-                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                              <div className={`flex items-center gap-2 text-xs font-bold font-mono ${isChecked ? 'text-emerald-500/70' : 'text-purple-400'}`}>
-                                <Clock className="w-3.5 h-3.5" />
-                                {slot.time}
-                              </div>
-                              <span className={`text-xs font-semibold px-2.5 py-0.5 rounded-full self-start sm:self-auto ${
-                                isChecked 
-                                  ? 'bg-emerald-950/40 border border-emerald-900/30 text-emerald-400/80' 
-                                  : 'bg-purple-950/40 border border-purple-900/30 text-purple-300'
-                              }`}>
-                                📚 {slot.subtopic}
-                              </span>
-                            </div>
-                            <p className={`text-sm leading-relaxed transition-all ${isChecked ? 'text-slate-500 line-through decoration-slate-700' : 'text-slate-300'}`}>
-                              {slot.task}
-                            </p>
-                            {hasNotes && (
-                              <p className="text-[11px] text-indigo-400 italic font-medium pt-1 line-clamp-1">
-                                📝 Notes: {slotNotes[slot.id]}
-                              </p>
-                            )}
-                          </div>
-
-                          <button
-                            onClick={(e) => openNotepadSidebar(e, slot, item.topic)}
-                            className={`absolute right-4 top-1/2 -translate-y-1/2 p-2 rounded-lg border border-slate-800 bg-slate-950/80 transition-all ${
-                              hasNotes 
-                                ? 'text-indigo-400 opacity-100 border-indigo-500/30' 
-                                : 'text-slate-500 opacity-0 group-hover:opacity-100 hover:text-indigo-400 hover:border-slate-700'
-                            }`}
-                            title="Workspace Drawer"
-                          >
-                            <FileEdit className="w-4 h-4" />
-                          </button>
-                        </div>
-                      );
-                    })}
-                  </div>
-
-                </div>
+          {/* --- SYLLABUS COMPLEXITY FILTERS HEADER TOOLBAR --- */}
+          {scheduleData && (
+            <div className="flex flex-wrap items-center gap-1.5 mb-5 bg-slate-950/40 p-2 border border-slate-900 rounded-xl">
+              <span className="text-[10px] font-extrabold tracking-wider text-slate-500 uppercase px-2 flex items-center gap-1">
+                <Filter className="w-3 h-3" /> Filter Complexity:
+              </span>
+              {['ALL', 'EASY', 'MEDIUM', 'HARD'].map((tier) => (
+                <button
+                  key={tier}
+                  onClick={() => setDifficultyFilter(tier)}
+                  className={`text-[10px] font-mono font-bold px-2.5 py-1 rounded transition-all ${
+                    difficultyFilter === tier 
+                      ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-500/20' 
+                      : 'bg-slate-900 text-slate-400 border border-slate-800/60 hover:text-slate-200'
+                  }`}
+                >
+                  {tier}
+                </button>
               ))}
+            </div>
+          )}
+
+          {scheduleData ? (
+            <div className="flex-1 space-y-6 overflow-y-auto max-h-[550px] pr-2">
+              {scheduleData
+                .filter(item => difficultyFilter === 'ALL' || getTopicDifficulty(item.topic) === difficultyFilter)
+                .map((item) => {
+                  const difficulty = getTopicDifficulty(item.topic);
+                  return (
+                    <div key={item.dayNumber} className="bg-slate-950/70 border border-slate-800/90 rounded-xl p-5 hover:border-indigo-500/20 transition-all shadow-xl">
+                      
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-900 pb-3 mb-4">
+                        <div className="flex items-center gap-3">
+                          <div className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-mono text-xs px-3 py-1 rounded-md font-extrabold shadow-sm">
+                            DAY {item.dayNumber}
+                          </div>
+                          <h3 className="text-sm font-extrabold text-slate-100 tracking-tight capitalize truncate max-w-xs md:max-w-md">{item.topic}</h3>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          {/* Difficulty Badge Node */}
+                          <span className={`text-[9px] font-black tracking-widest px-2 py-0.5 rounded border font-mono ${
+                            difficulty === 'HARD' ? 'bg-rose-950/30 border-rose-900/50 text-rose-400' :
+                            difficulty === 'MEDIUM' ? 'bg-amber-950/30 border-amber-900/50 text-amber-400' :
+                            'bg-emerald-950/30 border-emerald-900/50 text-emerald-400'
+                          }`}>
+                            {difficulty}
+                          </span>
+                          <span className="text-xs font-bold text-indigo-400 font-mono bg-indigo-950/40 border border-indigo-900/40 px-3 py-1 rounded-md">
+                            {item.date}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="space-y-4">
+                        {item.slots.map((slot) => {
+                          const isChecked = checkedSlots.includes(slot.id);
+                          const hasNotes = slotNotes[slot.id] && slotNotes[slot.id].trim().length > 0;
+                          return (
+                            <div 
+                              key={slot.id} 
+                              onClick={() => handleCardClick(slot.id)}
+                              className={`border rounded-xl p-4 cursor-pointer transition-all flex items-start gap-4 select-none group relative ${
+                                isChecked 
+                                  ? 'bg-emerald-950/10 border-emerald-500/30 shadow-inner opacity-60' 
+                                  : 'bg-slate-900/20 border-slate-900/60 hover:bg-slate-900/40 hover:border-slate-800'
+                              }`}
+                            >
+                              <div className="mt-0.5 shrink-0 transition-all duration-200">
+                                {isChecked ? (
+                                  <CheckCircle className="w-5 h-5 text-emerald-400 fill-emerald-950/50" />
+                                ) : (
+                                  <Circle className="w-5 h-5 text-slate-600 hover:text-indigo-400" />
+                                )}
+                              </div>
+
+                              <div className="flex-1 space-y-1 pr-8">
+                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                                  <div className={`flex items-center gap-2 text-xs font-bold font-mono ${isChecked ? 'text-emerald-500/70' : 'text-purple-400'}`}>
+                                    <Clock className="w-3.5 h-3.5" />
+                                    {slot.time}
+                                  </div>
+                                  <span className={`text-xs font-semibold px-2.5 py-0.5 rounded-full self-start sm:self-auto ${
+                                    isChecked 
+                                      ? 'bg-emerald-950/40 border border-emerald-900/30 text-emerald-400/80' 
+                                      : 'bg-purple-950/40 border border-purple-900/30 text-purple-300'
+                                  }`}>
+                                    📚 {slot.subtopic}
+                                  </span>
+                                </div>
+                                <p className={`text-sm leading-relaxed transition-all ${isChecked ? 'text-slate-500 line-through decoration-slate-700' : 'text-slate-300'}`}>
+                                  {slot.task}
+                                </p>
+                                {hasNotes && (
+                                  <p className="text-[11px] text-indigo-400 italic font-medium pt-1 line-clamp-1">
+                                    📝 Notes: {slotNotes[slot.id]}
+                                  </p>
+                                )}
+                              </div>
+
+                              <button
+                                onClick={(e) => openNotepadSidebar(e, slot, item.topic)}
+                                className={`absolute right-4 top-1/2 -translate-y-1/2 p-2 rounded-lg border border-slate-800 bg-slate-950/80 transition-all ${
+                                  hasNotes 
+                                    ? 'text-indigo-400 opacity-100 border-indigo-500/30' 
+                                    : 'text-slate-500 opacity-0 group-hover:opacity-100 hover:text-indigo-400 hover:border-slate-700'
+                                }`}
+                                title="Workspace Drawer"
+                              >
+                                <FileEdit className="w-4 h-4" />
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                    </div>
+                  );
+                })}
             </div>
           ) : (
             <div className="flex-1 flex flex-col items-center justify-center text-center p-8 border border-dashed border-slate-800 rounded-xl bg-slate-950/20">
