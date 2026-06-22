@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Brain, Calendar, BookOpen, Layers, Clock, CheckCircle, Circle, Upload, FileText, Loader2, RefreshCw, BarChart2, Download } from 'lucide-react';
+import { Brain, Calendar, BookOpen, Layers, Clock, CheckCircle, Circle, Upload, FileText, Loader2, RefreshCw, BarChart2, Download, FileEdit, X, Save } from 'lucide-react';
 
 export default function App() {
   const [topics, setTopics] = useState('');
@@ -9,14 +9,28 @@ export default function App() {
   const [scheduleData, setScheduleData] = useState(null);
   const fileInputRef = useRef(null);
   
+  // Slot checkbox state persistence
   const [checkedSlots, setCheckedSlots] = useState(() => {
     const saved = localStorage.getItem('mindmap_checked_slots');
     return saved ? JSON.parse(saved) : [];
   });
 
+  // Sidebar target slot state tracking
+  const [activeNoteSlot, setActiveNoteSlot] = useState(null);
+  
+  // Notepad text layer dictionary lookup tracking data bucket
+  const [slotNotes, setSlotNotes] = useState(() => {
+    const saved = localStorage.getItem('mindmap_slot_notes');
+    return saved ? JSON.parse(saved) : {};
+  });
+
   useEffect(() => {
     localStorage.setItem('mindmap_checked_slots', JSON.stringify(checkedSlots));
   }, [checkedSlots]);
+
+  useEffect(() => {
+    localStorage.setItem('mindmap_slot_notes', JSON.stringify(slotNotes));
+  }, [slotNotes]);
 
   useEffect(() => {
     const savedSchedule = localStorage.getItem('mindmap_current_schedule');
@@ -43,7 +57,6 @@ export default function App() {
     return dates;
   };
 
-  // --- GOOGLE CALENDAR EXPORT LOGIC ---
   const handleExportICS = () => {
     if (!scheduleData) return;
 
@@ -56,7 +69,6 @@ export default function App() {
     ];
 
     scheduleData.forEach((day, dayIdx) => {
-      // Establish calendar base object tracking date variables anchor
       const eventDate = new Date();
       eventDate.setDate(eventDate.getDate() + dayIdx);
       
@@ -66,7 +78,6 @@ export default function App() {
       const formattedBaseDate = `${yearStr}${monthStr}${dateStr}`;
 
       day.slots.forEach((slot, slotIdx) => {
-        // Set up sequential time tags based on slot array configurations
         let startHour = "09", endHour = "11", startMin = "30", endMin = "30";
         if (slotIdx === 1) { startHour = "14"; endHour = "16"; startMin = "00"; endMin = "30"; }
         if (slotIdx === 2) { startHour = "19"; endHour = "21"; startMin = "30"; endMin = "00"; }
@@ -90,7 +101,6 @@ export default function App() {
 
     icsContent.push("END:VCALENDAR");
 
-    // Serve string allocation binary arrays download pipeline securely
     const blob = new Blob([icsContent.join("\r\n")], { type: "text/calendar;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
@@ -205,6 +215,18 @@ export default function App() {
     }
   };
 
+  const openNotepadSidebar = (e, slot) => {
+    e.stopPropagation(); // Avoid triggering completion toggle when notes icon is clicked
+    setActiveNoteSlot(slot);
+  };
+
+  const handleNoteChange = (text) => {
+    setSlotNotes({
+      ...slotNotes,
+      [activeNoteSlot.id]: text
+    });
+  };
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col items-center justify-start p-6 font-sans relative overflow-x-hidden selection:bg-indigo-500 selection:text-white">
       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-7xl h-[300px] bg-gradient-to-r from-indigo-600/15 via-purple-600/15 to-pink-600/15 blur-[120px] pointer-events-none rounded-full" />
@@ -293,7 +315,7 @@ export default function App() {
         </div>
 
         {/* Right Output Roadmap Viewport Container */}
-        <div className="lg:col-span-2 bg-slate-900/40 border border-slate-800/50 rounded-2xl p-6 backdrop-blur-xl min-h-[550px] flex flex-col shadow-2xl">
+        <div className="lg:col-span-2 bg-slate-900/40 border border-slate-800/50 rounded-2xl p-6 backdrop-blur-xl min-h-[550px] flex flex-col shadow-2xl relative">
           <div className="flex items-center justify-between border-b border-slate-800/60 pb-4 mb-4">
             <div className="flex items-center gap-2">
               <Layers className="w-4 h-4 text-slate-400" />
@@ -301,7 +323,6 @@ export default function App() {
             </div>
             {scheduleData && (
               <div className="flex items-center gap-2">
-                {/* --- UNIVERSAL .ICS EXPORT CONTROL --- */}
                 <button 
                   onClick={handleExportICS}
                   className="flex items-center gap-1.5 text-xs text-indigo-400 hover:text-white transition-all font-semibold border border-indigo-500/30 hover:border-indigo-500 px-3 py-1.5 rounded-md bg-indigo-950/20 shadow-md"
@@ -360,11 +381,12 @@ export default function App() {
                   <div className="space-y-4">
                     {item.slots.map((slot) => {
                       const isChecked = checkedSlots.includes(slot.id);
+                      const hasNotes = slotNotes[slot.id] && slotNotes[slot.id].trim().length > 0;
                       return (
                         <div 
                           key={slot.id} 
                           onClick={() => toggleSlot(slot.id)}
-                          className={`border rounded-xl p-4 cursor-pointer transition-all flex items-start gap-4 select-none ${
+                          className={`border rounded-xl p-4 cursor-pointer transition-all flex items-start gap-4 select-none group relative ${
                             isChecked 
                               ? 'bg-emerald-950/10 border-emerald-500/30 shadow-inner opacity-60' 
                               : 'bg-slate-900/20 border-slate-900/60 hover:bg-slate-900/40 hover:border-slate-800'
@@ -378,7 +400,7 @@ export default function App() {
                             )}
                           </div>
 
-                          <div className="flex-1 space-y-1">
+                          <div className="flex-1 space-y-1 pr-8">
                             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                               <div className={`flex items-center gap-2 text-xs font-bold font-mono ${isChecked ? 'text-emerald-500/70' : 'text-purple-400'}`}>
                                 <Clock className="w-3.5 h-3.5" />
@@ -395,7 +417,25 @@ export default function App() {
                             <p className={`text-sm leading-relaxed transition-all ${isChecked ? 'text-slate-500 line-through decoration-slate-700' : 'text-slate-300'}`}>
                               {slot.task}
                             </p>
+                            {hasNotes && (
+                              <p className="text-[11px] text-indigo-400 italic font-medium pt-1 line-clamp-1">
+                                📝 Notes: {slotNotes[slot.id]}
+                              </p>
+                            )}
                           </div>
+
+                          {/* --- COLLAPSIBLE DRAWER SIDEBAR ACTION TRIGGER ICON --- */}
+                          <button
+                            onClick={(e) => openNotepadSidebar(e, slot)}
+                            className={`absolute right-4 top-1/2 -translate-y-1/2 p-2 rounded-lg border border-slate-800 bg-slate-950/80 transition-all ${
+                              hasNotes 
+                                ? 'text-indigo-400 opacity-100 border-indigo-500/30' 
+                                : 'text-slate-500 opacity-0 group-hover:opacity-100 hover:text-indigo-400 hover:border-slate-700'
+                            }`}
+                            title="Edit Core Notes"
+                          >
+                            <FileEdit className="w-4 h-4" />
+                          </button>
                         </div>
                       );
                     })}
@@ -414,6 +454,52 @@ export default function App() {
               </p>
             </div>
           )}
+
+          {/* --- SLIDE-OUT COLLAPSIBLE NOTE DRAWERS SIDEBAR PANELS LAYER --- */}
+          {activeNoteSlot && (
+            <div className="absolute inset-y-0 right-0 w-80 md:w-96 bg-slate-900/95 border-l border-slate-800/90 rounded-r-2xl shadow-[ -10px_0_30px_rgba(0,0,0,0.5)] z-20 backdrop-blur-xl p-5 flex flex-col gap-4 animate-in slide-in-from-right duration-200">
+              <div className="flex items-center justify-between border-b border-slate-800/60 pb-3">
+                <div className="flex items-center gap-2">
+                  <FileEdit className="w-4 h-4 text-indigo-400" />
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-slate-300">Live Workspace Notes</h3>
+                </div>
+                <button 
+                  onClick={() => setActiveNoteSlot(null)}
+                  className="text-slate-500 hover:text-rose-400 p-1 rounded-md transition-colors"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="space-y-1">
+                <span className="text-[10px] font-mono font-bold text-indigo-400 bg-indigo-950/50 border border-indigo-900/30 px-2 py-0.5 rounded">
+                  {activeNoteSlot.time}
+                </span>
+                <h4 className="text-sm font-bold text-slate-200 leading-snug pt-1">
+                  {activeNoteSlot.subtopic}
+                </h4>
+              </div>
+
+              <div className="flex-1 flex flex-col gap-2">
+                <label className="text-xs font-semibold text-slate-400">Notepad Area</label>
+                <textarea
+                  value={slotNotes[activeNoteSlot.id] || ''}
+                  onChange={(e) => handleNoteChange(e.target.value)}
+                  placeholder="Type algorithmic complexities, active-recall parameters, or test references here..."
+                  className="flex-1 w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 transition-all resize-none font-sans leading-relaxed"
+                />
+              </div>
+
+              <button
+                onClick={() => setActiveNoteSlot(null)}
+                className="w-full flex items-center justify-center gap-2 bg-slate-950 border border-slate-800 hover:border-indigo-500/40 hover:text-indigo-400 text-slate-300 py-2.5 rounded-xl text-xs font-bold tracking-wide transition-all shadow-md"
+              >
+                <Save className="w-4 h-4" />
+                <span>Save & Close Drawer</span>
+              </button>
+            </div>
+          )}
+
         </div>
       </main>
     </div>
