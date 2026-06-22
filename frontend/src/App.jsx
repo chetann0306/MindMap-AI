@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Brain, Calendar, BookOpen, Layers, Clock, CheckCircle, Circle, Upload, FileText, Loader2, RefreshCw, BarChart2, Download, FileEdit, X, Save, HelpCircle, Eye } from 'lucide-react';
+import { Brain, Calendar, BookOpen, Layers, Clock, CheckCircle, Circle, Upload, FileText, Loader2, RefreshCw, BarChart2, Download, FileEdit, X, Save, HelpCircle, Eye, Play, Pause, RotateCcw } from 'lucide-react';
 import * as pdfjsLib from 'pdfjs-dist';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version || '3.11.174'}/build/pdf.worker.min.js`;
@@ -14,6 +14,12 @@ export default function App() {
   const [activeNoteSlot, setActiveNoteSlot] = useState(null);
   const fileInputRef = useRef(null);
   
+  // --- POMODORO TIMER CORE STATES ---
+  const [timeLeft, setTimeLeft] = useState(25 * 60); 
+  const [timerRunning, setTimerRunning] = useState(false);
+  const [isBreak, setIsBreak] = useState(false);
+  const timerRef = useRef(null);
+
   const [checkedSlots, setCheckedSlots] = useState(() => {
     const saved = localStorage.getItem('mindmap_checked_slots');
     return saved ? JSON.parse(saved) : [];
@@ -39,6 +45,40 @@ export default function App() {
     }
   }, []);
 
+  // --- POMODORO CLOCK TICK ENGINE ---
+  useEffect(() => {
+    if (timerRunning) {
+      timerRef.current = setInterval(() => {
+        setTimeLeft((prev) => {
+          if (prev <= 1) {
+            clearInterval(timerRef.current);
+            const nextIsBreak = !isBreak;
+            setIsBreak(nextIsBreak);
+            setTimerRunning(false);
+            alert(nextIsBreak ? "🔔 Focus session complete! Take a 5-minute break." : "⏳ Break over! Back to deep learning focus.");
+            return nextIsBreak ? 5 * 60 : 25 * 60;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    } else {
+      clearInterval(timerRef.current);
+    }
+    return () => clearInterval(timerRef.current);
+  }, [timerRunning, isBreak]);
+
+  const formatTimerTime = (seconds) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+  };
+
+  const resetTimer = () => {
+    setTimerRunning(false);
+    setIsBreak(false);
+    setTimeLeft(25 * 60);
+  };
+
   // Progress Metrics Computations
   const totalSlotsCount = scheduleData ? scheduleData.reduce((acc, day) => acc + day.slots.length, 0) : 0;
   const completedSlotsCount = scheduleData ? scheduleData.reduce((acc, day) => {
@@ -54,7 +94,7 @@ export default function App() {
     if (clean.includes("recurrence") || clean.includes("master method") || clean.includes("substitution")) {
       return {
         question: "When does the Master Method fail to evaluate a recurrence relation?",
-        answer: "It fails if the recurrence function is not polynomial, if the ratio is not polynomial, or if the regularity condition fails for Case 3."
+        answer: "It fails if the recurrence function is not polynomial, if the ratio f(n)/n^(log_a b) is not polynomial, or if the regularity condition fails for Case 3."
       };
     }
     if (clean.includes("divide and conquer") || clean.includes("merge") || clean.includes("quick")) {
@@ -490,15 +530,15 @@ export default function App() {
             </div>
           )}
 
-          {/* Collapsible Slide-Out Recall + Notes Sidebar Drawer */}
+          {/* Collapsible Slide-Out Recall, Notes, and Pomodoro Sidebar Drawer */}
           {activeNoteSlot && (() => {
             const currentFlashcard = generateFlashcardPrompt(activeNoteSlot.parentTopic);
             return (
-              <div className="absolute inset-y-0 right-0 w-80 md:w-[400px] bg-slate-900/95 border-l border-slate-800/90 rounded-r-2xl shadow-[-15px_0_40px_rgba(0,0,0,0.6)] z-20 backdrop-blur-2xl p-5 flex flex-col gap-5 overflow-y-auto animate-in slide-in-from-right duration-200">
+              <div className="absolute inset-y-0 right-0 w-80 md:w-[420px] bg-slate-900/98 border-l border-slate-800/90 rounded-r-2xl shadow-[-15px_0_40px_rgba(0,0,0,0.6)] z-20 backdrop-blur-2xl p-5 flex flex-col gap-5 overflow-y-auto animate-in slide-in-from-right duration-200">
                 <div className="flex items-center justify-between border-b border-slate-800/60 pb-3">
                   <div className="flex items-center gap-2">
                     <Brain className="w-4 h-4 text-indigo-400" />
-                    <h3 className="text-xs font-bold uppercase tracking-wider text-slate-300">Active Recall Workspace</h3>
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-slate-300">Active Recall Studio</h3>
                   </div>
                   <button 
                     onClick={() => setActiveNoteSlot(null)}
@@ -506,6 +546,32 @@ export default function App() {
                   >
                     <X className="w-4 h-4" />
                   </button>
+                </div>
+
+                {/* --- POMODORO TIMER DASHBOARD HEADER WIDGET --- */}
+                <div className={`border rounded-xl p-3.5 flex items-center justify-between shadow-md transition-all ${isBreak ? 'bg-emerald-950/20 border-emerald-500/30' : 'bg-slate-950/80 border-slate-800/80'}`}>
+                  <div className="space-y-0.5">
+                    <span className={`text-[10px] font-extrabold tracking-widest uppercase font-mono ${isBreak ? 'text-emerald-400' : 'text-indigo-400'}`}>
+                      {isBreak ? "☕ Rest Interval" : "⏱️ Deep Focus Block"}
+                    </span>
+                    <div className="text-2xl font-black font-mono tracking-tight text-slate-100">
+                      {formatTimerTime(timeLeft)}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      onClick={() => setTimerRunning(!timerRunning)}
+                      className={`p-2 rounded-lg border transition-all ${timerRunning ? 'bg-amber-950/40 border-amber-500/30 text-amber-400' : 'bg-indigo-950/40 border-indigo-500/30 text-indigo-400'}`}
+                    >
+                      {timerRunning ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
+                    </button>
+                    <button
+                      onClick={resetTimer}
+                      className="p-2 rounded-lg border border-slate-800 bg-slate-900 hover:border-slate-700 text-slate-400 transition-all"
+                    >
+                      <RotateCcw className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
 
                 {/* Section 1: Flashcard Deck Card */}
