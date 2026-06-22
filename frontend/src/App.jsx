@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Brain, Calendar, BookOpen, Layers, Clock, CheckCircle, Circle, Upload, FileText, Loader2, RefreshCw, BarChart2 } from 'lucide-react';
+import { Brain, Calendar, BookOpen, Layers, Clock, CheckCircle, Circle, Upload, FileText, Loader2, RefreshCw, BarChart2, Download } from 'lucide-react';
 
 export default function App() {
   const [topics, setTopics] = useState('');
@@ -25,7 +25,7 @@ export default function App() {
     }
   }, []);
 
-  // --- PROGRESS METRICS CALCULATION ---
+  // Progress Metrics
   const totalSlotsCount = scheduleData ? scheduleData.reduce((acc, day) => acc + day.slots.length, 0) : 0;
   const completedSlotsCount = scheduleData ? scheduleData.reduce((acc, day) => {
     return acc + day.slots.filter(slot => checkedSlots.includes(slot.id)).length;
@@ -41,6 +41,64 @@ export default function App() {
       dates.push(nextDate.toLocaleDateString('en-US', options));
     }
     return dates;
+  };
+
+  // --- GOOGLE CALENDAR EXPORT LOGIC ---
+  const handleExportICS = () => {
+    if (!scheduleData) return;
+
+    let icsContent = [
+      "BEGIN:VCALENDAR",
+      "VERSION:2.0",
+      "PROID:-//MindMap AI//Syllabus Study Planner//EN",
+      "CALSCALE:GREGORIAN",
+      "METHOD:PUBLISH"
+    ];
+
+    scheduleData.forEach((day, dayIdx) => {
+      // Establish calendar base object tracking date variables anchor
+      const eventDate = new Date();
+      eventDate.setDate(eventDate.getDate() + dayIdx);
+      
+      const yearStr = eventDate.getFullYear();
+      const monthStr = String(eventDate.getMonth() + 1).padStart(2, '0');
+      const dateStr = String(eventDate.getDate()).padStart(2, '0');
+      const formattedBaseDate = `${yearStr}${monthStr}${dateStr}`;
+
+      day.slots.forEach((slot, slotIdx) => {
+        // Set up sequential time tags based on slot array configurations
+        let startHour = "09", endHour = "11", startMin = "30", endMin = "30";
+        if (slotIdx === 1) { startHour = "14"; endHour = "16"; startMin = "00"; endMin = "30"; }
+        if (slotIdx === 2) { startHour = "19"; endHour = "21"; startMin = "30"; endMin = "00"; }
+
+        const uid = `uid-mindmap-day-${day.dayNumber}-slot-${slotIdx}-${formattedBaseDate}@mindmapai.local`;
+        
+        icsContent.push(
+          "BEGIN:VEVENT",
+          `UID:${uid}`,
+          `DTSTAMP:${formattedBaseDate}T000000Z`,
+          `DTSTART:${formattedBaseDate}T${startHour}${startMin}00`,
+          `DTEND:${formattedBaseDate}T${endHour}${endMin}00`,
+          `SUMMARY:[DAA Study Plan] ${day.topic} (${slot.subtopic})`,
+          `DESCRIPTION:${slot.task.replace(/,/g, '\\,')}`,
+          "STATUS:CONFIRMED",
+          "SEQUENCE:0",
+          "END:VEVENT"
+        );
+      });
+    });
+
+    icsContent.push("END:VCALENDAR");
+
+    // Serve string allocation binary arrays download pipeline securely
+    const blob = new Blob([icsContent.join("\r\n")], { type: "text/calendar;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.setAttribute("download", "MindMap_Algorithms_StudyPlan.ics");
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   const handleFileUpload = async (e) => {
@@ -242,16 +300,26 @@ export default function App() {
               <h2 className="text-sm font-bold tracking-wider uppercase text-slate-400">Hourly Blueprint Breakdown</h2>
             </div>
             {scheduleData && (
-              <button 
-                onClick={() => { setScheduleData(null); localStorage.removeItem('mindmap_current_schedule'); }}
-                className="text-xs text-slate-400 hover:text-indigo-400 transition-colors font-medium border border-slate-800 px-3 py-1.5 rounded-md bg-slate-950/40"
-              >
-                Clear Workspace
-              </button>
+              <div className="flex items-center gap-2">
+                {/* --- UNIVERSAL .ICS EXPORT CONTROL --- */}
+                <button 
+                  onClick={handleExportICS}
+                  className="flex items-center gap-1.5 text-xs text-indigo-400 hover:text-white transition-all font-semibold border border-indigo-500/30 hover:border-indigo-500 px-3 py-1.5 rounded-md bg-indigo-950/20 shadow-md"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  <span>Sync Google Calendar</span>
+                </button>
+                <button 
+                  onClick={() => { setScheduleData(null); localStorage.removeItem('mindmap_current_schedule'); }}
+                  className="text-xs text-slate-400 hover:text-indigo-400 transition-colors font-medium border border-slate-800 px-3 py-1.5 rounded-md bg-slate-950/40"
+                >
+                  Clear Workspace
+                </button>
+              </div>
             )}
           </div>
 
-          {/* --- GLOWING PROGRESS TRACKER DASHBOARD BAR --- */}
+          {/* Progress Tracker Dashboard Bar */}
           {scheduleData && (
             <div className="bg-slate-950/80 border border-slate-800/70 rounded-xl p-4 mb-6 shadow-lg backdrop-blur-md flex flex-col gap-2">
               <div className="flex items-center justify-between text-xs font-bold text-slate-300">
@@ -263,7 +331,6 @@ export default function App() {
                   {completedSlotsCount} / {totalSlotsCount} SLOTS ({completionPercentage}%)
                 </span>
               </div>
-              {/* Dynamic Bar Tracking Layout */}
               <div className="w-full bg-slate-900 h-2.5 rounded-full overflow-hidden border border-slate-800">
                 <div 
                   className="bg-gradient-to-r from-indigo-500 via-purple-500 to-emerald-400 h-full rounded-full transition-all duration-500 ease-out shadow-[0_0_12px_rgba(99,102,241,0.4)]"
