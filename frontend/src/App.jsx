@@ -1,5 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Brain, Calendar, BookOpen, Layers, Clock, CheckCircle, Circle, Upload, FileText, Loader2, RefreshCw, BarChart2, Download, FileEdit, X, Save } from 'lucide-react';
+import { Brain, Calendar, BookOpen, Layers, Clock, CheckCircle, Circle, Upload, FileText, Loader2, RefreshCw, BarChart2, Download, FileEdit, X, Save, HelpCircle, Eye } from 'lucide-react';
+import * as pdfjsLib from 'pdfjs-dist';
+
+pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version || '3.11.174'}/build/pdf.worker.min.js`;
 
 export default function App() {
   const [topics, setTopics] = useState('');
@@ -7,18 +10,15 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [scheduleData, setScheduleData] = useState(null);
+  const [revealAnswer, setRevealAnswer] = useState(false);
+  const [activeNoteSlot, setActiveNoteSlot] = useState(null);
   const fileInputRef = useRef(null);
   
-  // Slot checkbox state persistence
   const [checkedSlots, setCheckedSlots] = useState(() => {
     const saved = localStorage.getItem('mindmap_checked_slots');
     return saved ? JSON.parse(saved) : [];
   });
 
-  // Sidebar target slot state tracking
-  const [activeNoteSlot, setActiveNoteSlot] = useState(null);
-  
-  // Notepad text layer dictionary lookup tracking data bucket
   const [slotNotes, setSlotNotes] = useState(() => {
     const saved = localStorage.getItem('mindmap_slot_notes');
     return saved ? JSON.parse(saved) : {};
@@ -39,12 +39,47 @@ export default function App() {
     }
   }, []);
 
-  // Progress Metrics
+  // Progress Metrics Computations
   const totalSlotsCount = scheduleData ? scheduleData.reduce((acc, day) => acc + day.slots.length, 0) : 0;
   const completedSlotsCount = scheduleData ? scheduleData.reduce((acc, day) => {
     return acc + day.slots.filter(slot => checkedSlots.includes(slot.id)).length;
   }, 0) : 0;
   const completionPercentage = totalSlotsCount > 0 ? Math.round((completedSlotsCount / totalSlotsCount) * 100) : 0;
+
+  // Active Recall Flashcard Map Lookups
+  const generateFlashcardPrompt = (topic) => {
+    if (!topic) return { question: "General review?", answer: "Consult core parameters." };
+    const clean = topic.toLowerCase();
+    
+    if (clean.includes("recurrence") || clean.includes("master method") || clean.includes("substitution")) {
+      return {
+        question: "When does the Master Method fail to evaluate a recurrence relation?",
+        answer: "It fails if the recurrence function is not polynomial, if the ratio is not polynomial, or if the regularity condition fails for Case 3."
+      };
+    }
+    if (clean.includes("divide and conquer") || clean.includes("merge") || clean.includes("quick")) {
+      return {
+        question: "What is the primary worst-case performance trade-off of Quick Sort vs. Merge Sort?",
+        answer: "Quick Sort drops to O(n²) efficiency if partitions are heavily skewed, whereas Merge Sort guarantees a strict O(n log n) bound but demands O(n) extra helper memory space."
+      };
+    }
+    if (clean.includes("greedy") || clean.includes("knapsack") || clean.includes("spanning")) {
+      return {
+        question: "What defining optimization rule separates Greedy Choices from Dynamic Programming?",
+        answer: "Greedy choice heuristics make locally optimal decisions at each step without reviewing future subproblems. Dynamic Programming solves all overlapping subproblems first and builds up globally."
+      };
+    }
+    if (clean.includes("dynamic") || clean.includes("floyd") || clean.includes("bellman")) {
+      return {
+        question: "Why would you select the Bellman-Ford SSSP algorithm over Dijkstra's model?",
+        answer: "Bellman-Ford accurately computes networks containing negative edge weights and flags negative-weight cycles, whereas Dijkstra's relaxation step produces corrupt tracking loops if negative paths are present."
+      };
+    }
+    return {
+      question: `What are the typical space and time efficiency bounds when implementing: "${topic}"?`,
+      answer: "Requires checking the worst-case asymptotic upper bounds (Big-O) and managing call stack recursive overhead layers cleanly."
+    };
+  };
 
   const generateDatesArray = (totalDays) => {
     const dates = [];
@@ -215,9 +250,10 @@ export default function App() {
     }
   };
 
-  const openNotepadSidebar = (e, slot) => {
-    e.stopPropagation(); // Avoid triggering completion toggle when notes icon is clicked
-    setActiveNoteSlot(slot);
+  const openNotepadSidebar = (e, slot, parentTopicName) => {
+    e.stopPropagation(); 
+    setRevealAnswer(false); 
+    setActiveNoteSlot({ ...slot, parentTopic: parentTopicName });
   };
 
   const handleNoteChange = (text) => {
@@ -314,7 +350,7 @@ export default function App() {
           </form>
         </div>
 
-        {/* Right Output Roadmap Viewport Container */}
+        {/* Right Output Container Viewport */}
         <div className="lg:col-span-2 bg-slate-900/40 border border-slate-800/50 rounded-2xl p-6 backdrop-blur-xl min-h-[550px] flex flex-col shadow-2xl relative">
           <div className="flex items-center justify-between border-b border-slate-800/60 pb-4 mb-4">
             <div className="flex items-center gap-2">
@@ -424,15 +460,14 @@ export default function App() {
                             )}
                           </div>
 
-                          {/* --- COLLAPSIBLE DRAWER SIDEBAR ACTION TRIGGER ICON --- */}
                           <button
-                            onClick={(e) => openNotepadSidebar(e, slot)}
+                            onClick={(e) => openNotepadSidebar(e, slot, item.topic)}
                             className={`absolute right-4 top-1/2 -translate-y-1/2 p-2 rounded-lg border border-slate-800 bg-slate-950/80 transition-all ${
                               hasNotes 
                                 ? 'text-indigo-400 opacity-100 border-indigo-500/30' 
                                 : 'text-slate-500 opacity-0 group-hover:opacity-100 hover:text-indigo-400 hover:border-slate-700'
                             }`}
-                            title="Edit Core Notes"
+                            title="Workspace Drawer"
                           >
                             <FileEdit className="w-4 h-4" />
                           </button>
@@ -455,50 +490,74 @@ export default function App() {
             </div>
           )}
 
-          {/* --- SLIDE-OUT COLLAPSIBLE NOTE DRAWERS SIDEBAR PANELS LAYER --- */}
-          {activeNoteSlot && (
-            <div className="absolute inset-y-0 right-0 w-80 md:w-96 bg-slate-900/95 border-l border-slate-800/90 rounded-r-2xl shadow-[ -10px_0_30px_rgba(0,0,0,0.5)] z-20 backdrop-blur-xl p-5 flex flex-col gap-4 animate-in slide-in-from-right duration-200">
-              <div className="flex items-center justify-between border-b border-slate-800/60 pb-3">
-                <div className="flex items-center gap-2">
-                  <FileEdit className="w-4 h-4 text-indigo-400" />
-                  <h3 className="text-xs font-bold uppercase tracking-wider text-slate-300">Live Workspace Notes</h3>
+          {/* Collapsible Slide-Out Recall + Notes Sidebar Drawer */}
+          {activeNoteSlot && (() => {
+            const currentFlashcard = generateFlashcardPrompt(activeNoteSlot.parentTopic);
+            return (
+              <div className="absolute inset-y-0 right-0 w-80 md:w-[400px] bg-slate-900/95 border-l border-slate-800/90 rounded-r-2xl shadow-[-15px_0_40px_rgba(0,0,0,0.6)] z-20 backdrop-blur-2xl p-5 flex flex-col gap-5 overflow-y-auto animate-in slide-in-from-right duration-200">
+                <div className="flex items-center justify-between border-b border-slate-800/60 pb-3">
+                  <div className="flex items-center gap-2">
+                    <Brain className="w-4 h-4 text-indigo-400" />
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-slate-300">Active Recall Workspace</h3>
+                  </div>
+                  <button 
+                    onClick={() => setActiveNoteSlot(null)}
+                    className="text-slate-500 hover:text-rose-400 p-1 rounded-md transition-colors"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
                 </div>
-                <button 
+
+                {/* Section 1: Flashcard Deck Card */}
+                <div className="bg-slate-950/60 border border-slate-800/80 rounded-xl p-4 space-y-3 shadow-inner">
+                  <div className="flex items-center gap-2 text-xs font-semibold text-purple-400">
+                    <HelpCircle className="w-3.5 h-3.5" />
+                    <span>Syllabus Flashcard Prompt</span>
+                  </div>
+                  <p className="text-xs font-medium text-slate-200 leading-relaxed">
+                    {currentFlashcard.question}
+                  </p>
+                  
+                  {revealAnswer ? (
+                    <div className="bg-slate-900/80 border border-indigo-950/50 rounded-lg p-3 text-xs text-indigo-300 leading-relaxed border-l-2 border-l-indigo-500 animate-in fade-in duration-200">
+                      {currentFlashcard.answer}
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setRevealAnswer(true)}
+                      className="w-full flex items-center justify-center gap-2 py-2 bg-indigo-950/40 hover:bg-indigo-900/40 border border-indigo-900/40 text-indigo-300 hover:text-white rounded-lg text-[11px] font-bold transition-all shadow-sm"
+                    >
+                      <Eye className="w-3.5 h-3.5" />
+                      <span>Test Active Recall & Flip Card</span>
+                    </button>
+                  )}
+                </div>
+
+                {/* Section 2: Studio Study Notebook Area */}
+                <div className="flex-1 flex flex-col gap-2 min-h-[180px]">
+                  <label className="text-xs font-semibold text-slate-400 flex items-center gap-1.5">
+                    <FileText className="w-3.5 h-3.5 text-indigo-400" />
+                    Personal Studio Study Notes
+                  </label>
+                  <textarea
+                    value={slotNotes[activeNoteSlot.id] || ''}
+                    onChange={(e) => handleNoteChange(e.target.value)}
+                    placeholder="Type derivation steps, computational formulas, complexity upper bounds, or reference pointers here..."
+                    className="flex-1 w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-xs text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 transition-all resize-none font-mono leading-relaxed bg-opacity-60"
+                  />
+                </div>
+
+                <button
                   onClick={() => setActiveNoteSlot(null)}
-                  className="text-slate-500 hover:text-rose-400 p-1 rounded-md transition-colors"
+                  className="w-full flex items-center justify-center gap-2 bg-slate-950 border border-slate-800 hover:border-indigo-500/40 hover:text-indigo-400 text-slate-300 py-2.5 rounded-xl text-xs font-bold tracking-wide transition-all shadow-md mt-auto shrink-0"
                 >
-                  <X className="w-4 h-4" />
+                  <Save className="w-4 h-4" />
+                  <span>Save Workspace & Close</span>
                 </button>
               </div>
-
-              <div className="space-y-1">
-                <span className="text-[10px] font-mono font-bold text-indigo-400 bg-indigo-950/50 border border-indigo-900/30 px-2 py-0.5 rounded">
-                  {activeNoteSlot.time}
-                </span>
-                <h4 className="text-sm font-bold text-slate-200 leading-snug pt-1">
-                  {activeNoteSlot.subtopic}
-                </h4>
-              </div>
-
-              <div className="flex-1 flex flex-col gap-2">
-                <label className="text-xs font-semibold text-slate-400">Notepad Area</label>
-                <textarea
-                  value={slotNotes[activeNoteSlot.id] || ''}
-                  onChange={(e) => handleNoteChange(e.target.value)}
-                  placeholder="Type algorithmic complexities, active-recall parameters, or test references here..."
-                  className="flex-1 w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 transition-all resize-none font-sans leading-relaxed"
-                />
-              </div>
-
-              <button
-                onClick={() => setActiveNoteSlot(null)}
-                className="w-full flex items-center justify-center gap-2 bg-slate-950 border border-slate-800 hover:border-indigo-500/40 hover:text-indigo-400 text-slate-300 py-2.5 rounded-xl text-xs font-bold tracking-wide transition-all shadow-md"
-              >
-                <Save className="w-4 h-4" />
-                <span>Save & Close Drawer</span>
-              </button>
-            </div>
-          )}
+            );
+          })()}
 
         </div>
       </main>
