@@ -1,24 +1,23 @@
-import React, { useState, useEffect } from 'react';
-import { Brain, Calendar, Sparkles, BookOpen, Layers, Clock, CheckCircle, Circle } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Brain, Calendar, BookOpen, Layers, Clock, CheckCircle, Circle, Upload, FileText, Loader2, RefreshCw } from 'lucide-react';
 
 export default function App() {
   const [topics, setTopics] = useState('');
-  const [days, setDays] = useState(5);
+  const [days, setDays] = useState(10);
   const [loading, setLoading] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [scheduleData, setScheduleData] = useState(null);
+  const fileInputRef = useRef(null);
   
-  // Initialize checked slots from localStorage
   const [checkedSlots, setCheckedSlots] = useState(() => {
     const saved = localStorage.getItem('mindmap_checked_slots');
     return saved ? JSON.parse(saved) : [];
   });
 
-  // Sync checked slots to localStorage on change
   useEffect(() => {
     localStorage.setItem('mindmap_checked_slots', JSON.stringify(checkedSlots));
   }, [checkedSlots]);
 
-  // Load existing schedule configuration on first mount
   useEffect(() => {
     const savedSchedule = localStorage.getItem('mindmap_current_schedule');
     if (savedSchedule) {
@@ -26,7 +25,6 @@ export default function App() {
     }
   }, []);
 
-  // Helper utility to generate calendar date tags starting today
   const generateDatesArray = (totalDays) => {
     const dates = [];
     const options = { weekday: 'short', month: 'short', day: 'numeric' };
@@ -38,80 +36,98 @@ export default function App() {
     return dates;
   };
 
+  // Secure Server-Backed Upload Handler
+  const handleFileUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    setUploading(true);
+    const formData = new FormData();
+    formData.append("file", file);
+
+    try {
+      const response = await fetch('http://127.0.0.1:8000/api/upload-pdf', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) throw new Error(`Server returned error code: ${response.status}`);
+      const data = await response.json();
+      
+      if (data.status === "Success") {
+        setTopics(data.text);
+      } else {
+        alert(`Parsing Failed: ${data.message}`);
+      }
+    } catch (error) {
+      console.error("PDF Parsing Exception:", error);
+      alert("❌ Failed to communicate with python file server on port 8000.");
+    } finally {
+      setUploading(false);
+    }
+  };
+
   const handleGenerate = async (e) => {
     e.preventDefault();
     if (!topics.trim()) return;
 
     setLoading(true);
     setScheduleData(null); 
-    setCheckedSlots([]); // Clear out old task progress on new generation
+    setCheckedSlots([]); 
 
     const topicsArray = topics
-      .split(/[,\n]/)
-      .map(topic => topic.trim())
-      .filter(topic => topic.length > 0);
+      .split('\n')
+      .map(t => t.trim())
+      .filter(t => t.length > 4);
 
     try {
       const response = await fetch('http://127.0.0.1:8000/api/generate', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          topics: topicsArray, 
+          topics: topicsArray,
           days: parseInt(days, 10)
         }),
       });
 
-      if (!response.ok) throw new Error(`Server response error status: ${response.status}`);
-      const data = await response.json();
+      if (!response.ok) throw new Error(`API Connection Error: ${response.status}`);
       
-      // Check for success confirmation from the Python API
-      if (data.status === "Success" || data.schedule) {
-        const dateLabels = generateDatesArray(parseInt(days, 10));
+      const dateLabels = generateDatesArray(parseInt(days, 10));
+      const structuredDays = dateLabels.map((dateStr, index) => {
+        const targetedTopic = topicsArray[index % topicsArray.length] || "Advanced Core Algorithm Synthesis";
         
-        const structuredDays = dateLabels.map((dateStr, index) => {
-          const targetedTopic = topicsArray[index % topicsArray.length] || "Comprehensive System Integration";
-          
-          return {
-            dayNumber: index + 1,
-            date: dateStr,
-            topic: targetedTopic,
-            slots: [
-              { 
-                id: `day-${index + 1}-slot-1`,
-                time: "09:00 AM - 11:30 AM", 
-                subtopic: "Core Architecture & Syntax",
-                task: `Deep dive overview of structural variables, foundational primitives, and memory layout of ${targetedTopic}.` 
-              },
-              { 
-                id: `day-${index + 1}-slot-2`,
-                time: "01:00 PM - 03:30 PM", 
-                subtopic: "Algorithm Optimization & Edge Cases",
-                task: `Execution profiling, identifying runtime bottleneck complexities, and parsing multi-threaded edge cases.` 
-              },
-              { 
-                id: `day-${index + 1}-slot-3`,
-                time: "04:00 PM - 05:30 PM", 
-                subtopic: "Practical Lab Code-Along",
-                task: `Building a fully isolated sandbox project implementation compiling ${targetedTopic} clean architectures.` 
-              },
-              { 
-                id: `day-${index + 1}-slot-4`,
-                time: "08:00 PM - 09:30 PM", 
-                subtopic: "Active Recall & Mock Prompts",
-                task: `Testing flashcards, system-design whiteboarding exercises, and self-evaluation grading.` 
-              }
-            ]
-          };
-        });
+        return {
+          dayNumber: index + 1,
+          date: dateStr,
+          topic: targetedTopic,
+          slots: [
+            { 
+              id: `day-${index + 1}-slot-1`,
+              time: "09:30 AM - 11:30 AM", 
+              subtopic: "Mathematical Analysis & Proofs",
+              task: `Analyze asymptotic performance bounds, verify edge complexities, and map core design constraints for: ${targetedTopic}.` 
+            },
+            { 
+              id: `day-${index + 1}-slot-2`,
+              time: "02:00 PM - 04:30 PM", 
+              subtopic: "Implementation Lab",
+              task: `Write correctness models, construct functional trace trees, and practice tracking execution metrics for: ${targetedTopic}.` 
+            },
+            { 
+              id: `day-${index + 1}-slot-3`,
+              time: "07:30 PM - 09:00 PM", 
+              subtopic: "Active Recall",
+              task: `Practice engineering design scenario workflows, work through past assessment templates, and target key retrieval prompts.` 
+            }
+          ]
+        };
+      });
 
-        setScheduleData(structuredDays);
-        localStorage.setItem('mindmap_current_schedule', JSON.stringify(structuredDays));
-      }
+      setScheduleData(structuredDays);
+      localStorage.setItem('mindmap_current_schedule', JSON.stringify(structuredDays));
     } catch (error) {
-      console.error("Fetch Error:", error);
-      alert(`❌ Connection Error. Ensure your local FastAPI app.py server is up and executing on port 8000.`);
+      console.error("Fetch Execution Blocked:", error);
+      alert(`❌ Sync Intercepted. Ensure your local Uvicorn FastAPI process is running smoothly on port 8000.`);
     } finally {
       setLoading(false);
     }
@@ -125,54 +141,65 @@ export default function App() {
     }
   };
 
-  const resetAllProgress = () => {
-    setCheckedSlots([]);
-    localStorage.removeItem('mindmap_checked_slots');
-  };
-
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col items-center justify-start p-6 font-sans relative overflow-x-hidden selection:bg-indigo-500 selection:text-white">
-      
-      {/* Decorative Glow backdrop layer */}
       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-7xl h-[300px] bg-gradient-to-r from-indigo-600/15 via-purple-600/15 to-pink-600/15 blur-[120px] pointer-events-none rounded-full" />
 
-      {/* Header Container */}
+      {/* Header Panel */}
       <header className="relative z-10 text-center my-12">
         <div className="inline-flex items-center gap-3 bg-slate-900/80 border border-slate-800 px-4 py-2 rounded-full mb-4 shadow-xl backdrop-blur-md">
-          <Brain className="w-5 h-5 text-indigo-400 animate-pulse" />
-          <span className="text-xs font-semibold tracking-wider uppercase text-indigo-300">Persistence Workspace Live</span>
+          <Brain className="w-5 h-5 text-indigo-400" />
+          <span className="text-xs font-semibold tracking-wider uppercase text-indigo-300">FastAPI Server Parsing Engine</span>
         </div>
         <h1 className="text-5xl md:text-6xl font-extrabold tracking-tight bg-gradient-to-r from-white via-slate-200 to-slate-400 bg-clip-text text-transparent">
           MindMap <span className="bg-gradient-to-r from-indigo-400 via-purple-400 to-pink-400 bg-clip-text text-transparent">AI</span>
         </h1>
         <p className="mt-4 text-slate-400 text-lg max-w-md mx-auto">
-          Your granular, interactive study tracker workspace.
+          Upload your syllabus PDF handout to instantly build trackable study milestones.
         </p>
       </header>
 
-      {/* Primary Dashboard layout Grid */}
+      {/* Primary Workspace Grid */}
       <main className="relative z-10 w-full max-w-6xl grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
         
-        {/* Left Input Configuration Card */}
-        <div className="lg:col-span-1 bg-slate-900/60 border border-slate-800/80 rounded-2xl p-6 backdrop-blur-xl shadow-2xl relative">
+        {/* Left Interactive Control Dock */}
+        <div className="lg:col-span-1 bg-slate-900/60 border border-slate-800/80 rounded-2xl p-6 backdrop-blur-xl shadow-2xl space-y-6">
+          <div>
+            <label className="flex items-center gap-2 text-sm font-semibold text-slate-300 mb-2">
+              <Upload className="w-4 h-4 text-indigo-400" />
+              Upload Handout Document
+            </label>
+            <div 
+              onClick={() => fileInputRef.current.click()}
+              className="border-2 border-dashed border-slate-800 hover:border-indigo-500/40 bg-slate-950/40 rounded-xl p-5 text-center cursor-pointer transition-all hover:bg-slate-950/80 group flex flex-col items-center justify-center relative overflow-hidden"
+            >
+              <input type="file" ref={fileInputRef} onChange={handleFileUpload} accept="application/pdf" className="hidden" />
+              <FileText className="w-8 h-8 text-slate-600 group-hover:text-indigo-400 transition-colors mb-2" />
+              <p className="text-xs font-medium text-slate-400 group-hover:text-slate-300 transition-colors">
+                {uploading ? "Python extracting layout fields..." : "Drop Handout here"}
+              </p>
+              <p className="text-[10px] text-slate-600 mt-1">Processed natively via pypdf backend</p>
+            </div>
+          </div>
+
           <form onSubmit={handleGenerate} className="space-y-6">
             <div>
               <label className="flex items-center gap-2 text-sm font-semibold text-slate-300 mb-2">
                 <BookOpen className="w-4 h-4 text-indigo-400" />
-                Enter Study Topics
+                Syllabus Topics List
               </label>
               <textarea
                 value={topics}
                 onChange={(e) => setTopics(e.target.value)}
-                placeholder="e.g. Linked Lists, Dynamic Programming, Computer Networks"
-                className="w-full h-32 bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-slate-200 placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all resize-none text-sm"
+                placeholder="Parsed algorithm blocks appear here..."
+                className="w-full h-52 bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 transition-all resize-none text-[11px] font-mono leading-relaxed bg-opacity-40"
               />
             </div>
 
             <div>
               <label className="flex items-center gap-2 text-sm font-semibold text-slate-300 mb-2">
                 <Calendar className="w-4 h-4 text-purple-400" />
-                Total Study Days Available
+                Study Plan Duration (Days)
               </label>
               <input
                 type="number"
@@ -190,14 +217,19 @@ export default function App() {
               className="w-full relative group overflow-hidden rounded-xl bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 p-[1px] font-bold shadow-lg disabled:opacity-50 transition-all active:scale-[0.98]"
             >
               <span className="flex items-center justify-center gap-2 w-full bg-slate-950 hover:bg-transparent text-white px-4 py-3.5 rounded-xl transition-all duration-300 text-sm">
-                {loading ? "Compiling Matrix Array..." : "Generate Custom Schedule 🚀"}
+                {loading ? (
+                  <Loader2 className="w-4 h-4 animate-spin text-indigo-400" />
+                ) : (
+                  <RefreshCw className="w-4 h-4 text-purple-400" />
+                )}
+                <span>Process Syllabus Timeline 🚀</span>
               </span>
             </button>
           </form>
         </div>
 
-        {/* Right Output Roadmap Viewport */}
-        <div className="lg:col-span-2 bg-slate-900/40 border border-slate-800/50 rounded-2xl p-6 backdrop-blur-xl min-h-[500px] flex flex-col shadow-2xl">
+        {/* Right Output Roadmap Viewport Container */}
+        <div className="lg:col-span-2 bg-slate-900/40 border border-slate-800/50 rounded-2xl p-6 backdrop-blur-xl min-h-[550px] flex flex-col shadow-2xl">
           <div className="flex items-center justify-between border-b border-slate-800/60 pb-4 mb-6">
             <div className="flex items-center gap-2">
               <Layers className="w-4 h-4 text-slate-400" />
@@ -205,10 +237,10 @@ export default function App() {
             </div>
             {scheduleData && (
               <button 
-                onClick={resetAllProgress}
-                className="text-xs text-slate-400 hover:text-indigo-400 transition-colors font-medium border border-slate-800 hover:border-indigo-500/30 px-3 py-1.5 rounded-md bg-slate-950/40"
+                onClick={() => { setScheduleData(null); localStorage.removeItem('mindmap_current_schedule'); }}
+                className="text-xs text-slate-400 hover:text-indigo-400 transition-colors font-medium border border-slate-800 px-3 py-1.5 rounded-md bg-slate-950/40"
               >
-                Reset Progress
+                Clear Workspace
               </button>
             )}
           </div>
@@ -218,20 +250,18 @@ export default function App() {
               {scheduleData.map((item) => (
                 <div key={item.dayNumber} className="bg-slate-950/70 border border-slate-800/90 rounded-xl p-5 hover:border-indigo-500/20 transition-all shadow-xl">
                   
-                  {/* Top Day Row Metadata Banner Header */}
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-900 pb-3 mb-4">
                     <div className="flex items-center gap-3">
                       <div className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-mono text-xs px-3 py-1 rounded-md font-extrabold shadow-sm">
                         DAY {item.dayNumber}
                       </div>
-                      <h3 className="text-base font-extrabold text-slate-100 tracking-tight">{item.topic}</h3>
+                      <h3 className="text-sm font-extrabold text-slate-100 tracking-tight capitalize truncate max-w-xs md:max-w-md">{item.topic}</h3>
                     </div>
-                    <span className="text-xs font-bold text-indigo-400 font-mono bg-indigo-950/40 border border-indigo-900/40 px-3 py-1 rounded-md">
+                    <span className="text-xs font-bold text-indigo-400 font-mono bg-indigo-950/40 border border-indigo-900/40 px-3 py-1 rounded-md shrink-0">
                       {item.date}
                     </span>
                   </div>
 
-                  {/* Hourly Timelines Execution Cards */}
                   <div className="space-y-4">
                     {item.slots.map((slot) => {
                       const isChecked = checkedSlots.includes(slot.id);
@@ -241,20 +271,18 @@ export default function App() {
                           onClick={() => toggleSlot(slot.id)}
                           className={`border rounded-xl p-4 cursor-pointer transition-all flex items-start gap-4 select-none ${
                             isChecked 
-                              ? 'bg-emerald-950/10 border-emerald-500/30 shadow-inner opacity-60' 
+                              ? 'bg-emerald-950/10 border-emerald-500/30 shadow-inner opacity-60 grayscale-[20%]' 
                               : 'bg-slate-900/20 border-slate-900/60 hover:bg-slate-900/40 hover:border-slate-800'
                           }`}
                         >
-                          {/* Checked Icon Selector */}
-                          <div className="mt-0.5 shrink-0 transition-transform active:scale-90">
+                          <div className="mt-0.5 shrink-0 transition-all duration-200">
                             {isChecked ? (
                               <CheckCircle className="w-5 h-5 text-emerald-400 fill-emerald-950/50" />
                             ) : (
-                              <Circle className="w-5 h-5 text-slate-600 hover:text-indigo-400 transition-colors" />
+                              <Circle className="w-5 h-5 text-slate-600 hover:text-indigo-400" />
                             )}
                           </div>
 
-                          {/* Time Details Context */}
                           <div className="flex-1 space-y-1">
                             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                               <div className={`flex items-center gap-2 text-xs font-bold font-mono ${isChecked ? 'text-emerald-500/70' : 'text-purple-400'}`}>
@@ -266,7 +294,7 @@ export default function App() {
                                   ? 'bg-emerald-950/40 border border-emerald-900/30 text-emerald-400/80' 
                                   : 'bg-purple-950/40 border border-purple-900/30 text-purple-300'
                               }`}>
-                                📚 Subtopic: {slot.subtopic}
+                                📚 {slot.subtopic}
                               </span>
                             </div>
                             <p className={`text-sm leading-relaxed transition-all ${isChecked ? 'text-slate-500 line-through decoration-slate-700' : 'text-slate-300'}`}>
@@ -284,10 +312,10 @@ export default function App() {
           ) : (
             <div className="flex-1 flex flex-col items-center justify-center text-center p-8 border border-dashed border-slate-800 rounded-xl bg-slate-950/20">
               <div className="p-4 bg-slate-900/80 rounded-2xl border border-slate-800 mb-4 text-slate-500">
-                <Calendar className="w-6 h-6" />
+                <FileText className="w-6 h-6" />
               </div>
               <p className="text-sm text-slate-500 max-w-xs">
-                Your subtopics, timing configurations, and lesson objectives will display inside this container module once generated.
+                Upload your semester handout PDF file or set configuration elements manually to assemble your calendar tracks!
               </p>
             </div>
           )}
